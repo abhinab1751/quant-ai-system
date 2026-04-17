@@ -53,7 +53,7 @@ class BacktestRun(BaseModel):
     id               = AutoField()
     symbol           = CharField(max_length=10, index=True)
     initial_capital  = FloatField(default=10000.0)
-    period           = CharField(max_length=16, default="6mo")
+    period           = CharField(max_length=16, default="2y")
     final_value      = FloatField()
     total_return_pct = FloatField()
     sharpe_ratio     = FloatField()

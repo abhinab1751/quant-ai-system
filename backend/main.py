@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from contextlib import asynccontextmanager
 
 from api.routes import market, prediction, news
@@ -21,7 +21,7 @@ async def lifespan(app: FastAPI):
     stop_scheduler()
 
 
-app = FastAPI(title="Quant AI System", version="5.0.0", lifespan=lifespan)
+app = FastAPI(title="Quant AI System", version="6.0.0", lifespan=lifespan)
 
 prediction_agent = PredictionAgent()
 research_agent   = ResearchAgent()
@@ -36,7 +36,34 @@ app.include_router(ws_router,         prefix="/ws")
 
 @app.get("/")
 def root():
-    return {"message": "Quant AI System v5"}
+    return {"message": "Quant AI System v6"}
+
+
+@app.get("/ohlcv/{symbol}")
+def get_ohlcv(symbol: str, period: str = Query("6mo")):
+    sym = symbol.upper()
+    df  = data_agent.get_historical_data(sym, period=period)
+    if df.empty:
+        return {"symbol": sym, "candles": []}
+
+    df = df.reset_index()
+    date_col = "Date" if "Date" in df.columns else df.columns[0]
+
+    candles = []
+    for _, row in df.iterrows():
+        try:
+            candles.append({
+                "time":   str(row[date_col])[:10],
+                "open":   round(float(row["Open"]),  4),
+                "high":   round(float(row["High"]),  4),
+                "low":    round(float(row["Low"]),   4),
+                "close":  round(float(row["Close"]), 4),
+                "volume": int(row.get("Volume", 0)),
+            })
+        except Exception:
+            continue
+
+    return {"symbol": sym, "candles": candles}
 
 
 @app.get("/decision/{symbol}")
@@ -49,7 +76,6 @@ def get_decision(symbol: str):
 
     articles = research_agent.fetch_news(sym)
     sentiment_label, sentiment_confidence = research_agent.analyze_sentiment(articles)
-
     fear_greed = data_agent.get_fear_greed()
 
     decision = decide_action(
@@ -63,24 +89,21 @@ def get_decision(symbol: str):
         save_price(sym, price)
 
     save_prediction(
-        symbol          = sym,
-        ml_prediction   = ml_prediction,
-        ml_confidence   = round(ml_confidence, 4),
-        sentiment       = sentiment_label,
-        sent_confidence = round(sentiment_confidence, 4),
-        action          = decision["action"],
-        reason          = decision["reason"],
+        symbol=sym, ml_prediction=ml_prediction,
+        ml_confidence=round(ml_confidence, 4),
+        sentiment=sentiment_label,
+        sent_confidence=round(sentiment_confidence, 4),
+        action=decision["action"], reason=decision["reason"],
     )
 
     return {
-        "symbol":               sym,
-        "price":                price,
-        "ml_prediction":        ml_prediction,
-        "ml_confidence":        round(ml_confidence, 4),
-        "sentiment":            sentiment_label,
+        "symbol": sym, "price": price,
+        "ml_prediction": ml_prediction,
+        "ml_confidence": round(ml_confidence, 4),
+        "sentiment": sentiment_label,
         "sentiment_confidence": round(sentiment_confidence, 4),
-        "fear_greed":           fear_greed,
-        "decision":             decision,
+        "fear_greed": fear_greed,
+        "decision": decision,
     }
 
 

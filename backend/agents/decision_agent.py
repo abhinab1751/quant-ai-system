@@ -11,47 +11,53 @@ def decide_action(
 
     if ml_prediction == "UP":
         if ml_confidence >= 0.65:
-            score += 3; reasons.append("strong ML↑"); strength = "strong"
+            score += 3; reasons.append(f"strong ML↑ ({ml_confidence:.0%})")
         elif ml_confidence >= 0.55:
-            score += 2; reasons.append("moderate ML↑")
+            score += 2; reasons.append(f"moderate ML↑ ({ml_confidence:.0%})")
         else:
-            score += 1; reasons.append("weak ML↑")
+            score += 1; reasons.append(f"weak ML↑ ({ml_confidence:.0%})")
     else:
         if ml_confidence >= 0.65:
-            score -= 3; reasons.append("strong ML↓"); strength = "strong"
+            score -= 3; reasons.append(f"strong ML↓ ({ml_confidence:.0%})")
         elif ml_confidence >= 0.55:
-            score -= 2; reasons.append("moderate ML↓")
+            score -= 2; reasons.append(f"moderate ML↓ ({ml_confidence:.0%})")
         else:
-            score -= 1; reasons.append("weak ML↓")
+            score -= 1; reasons.append(f"weak ML↓ ({ml_confidence:.0%})")
 
-    if sentiment == "POSITIVE" and sentiment_confidence > 0.2:
-        pts = 2 if sentiment_confidence > 0.5 else 1
-        score += pts; reasons.append(f"positive sentiment ({sentiment_confidence:.0%})")
-    elif sentiment == "NEGATIVE" and sentiment_confidence > 0.2:
-        pts = 2 if sentiment_confidence > 0.5 else 1
-        score -= pts; reasons.append(f"negative sentiment ({sentiment_confidence:.0%})")
+    if sentiment == "POSITIVE" and sentiment_confidence > 0.15:
+        pts = 2 if sentiment_confidence > 0.4 else 1
+        score += pts
+        reasons.append(f"positive news ({sentiment_confidence:.0%})")
+    elif sentiment == "NEGATIVE" and sentiment_confidence > 0.15:
+        pts = 2 if sentiment_confidence > 0.4 else 1
+        score -= pts
+        reasons.append(f"negative news ({sentiment_confidence:.0%})")
     else:
-        reasons.append("neutral sentiment")
+        reasons.append("neutral news")
 
-    fg_label = ""
     if fear_greed:
         fg_val = fear_greed.get("value", 50)
-        fg_label = fear_greed.get("label", "")
-        if fg_val >= 75:          
-            score -= 1; reasons.append(f"extreme greed ({fg_val})")
-        elif fg_val >= 55:        
-            score += 1; reasons.append(f"greed index ({fg_val})")
-        elif fg_val <= 25:        
-            score += 1; reasons.append(f"extreme fear — contrarian buy ({fg_val})")
-        elif fg_val <= 45:        
-            score -= 1; reasons.append(f"fear index ({fg_val})")
+        if fg_val >= 75:
+            score -= 1; reasons.append(f"extreme greed ({fg_val}) — caution")
+        elif fg_val >= 60:
+            score += 1; reasons.append(f"greed ({fg_val})")
+        elif fg_val <= 25:
+            score += 1; reasons.append(f"extreme fear ({fg_val}) — contrarian buy")
+        elif fg_val <= 40:
+            score -= 1; reasons.append(f"fear ({fg_val})")
 
-    if score >= 4:
+    if score >= 5:
         action   = "BUY"
-        strength = "strong" if score >= 6 else "moderate"
-    elif score <= -4:
+        strength = "strong"
+    elif score >= 3:
+        action   = "BUY"
+        strength = "moderate"
+    elif score <= -5:
         action   = "SELL"
-        strength = "strong" if score <= -6 else "moderate"
+        strength = "strong"
+    elif score <= -3:
+        action   = "SELL"
+        strength = "moderate"
     else:
         action   = "HOLD"
         strength = "weak"

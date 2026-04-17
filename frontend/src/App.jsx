@@ -7,6 +7,8 @@ import FeatureChart  from './components/FeatureChart'
 import Watchlist     from './components/Watchlist'
 import { useStockStream } from './hooks/useStockStream'
 import { useToasts, ToastContainer, toast } from './components/Toast'
+import CandlestickChart from './components/CandlestickChart'
+import logo from './assets/candleStick.png'
 
 const TABS = ['overview', 'backtest', 'history', 'model']
 
@@ -41,7 +43,7 @@ export default function App() {
       {/* ── Header ── */}
       <header style={styles.header}>
         <div style={styles.logo}>
-          <span style={styles.logoIcon}>◈</span>
+          <img src={logo} alt="logo" style={styles.logoImg} />
           <span style={styles.logoText}>Quant AI</span>
         </div>
 
@@ -85,9 +87,10 @@ export default function App() {
           {/* Content */}
           <div style={styles.content}>
             {tab === 'overview' && (
-              <div style={styles.grid}>
-                <DecisionCard symbol={symbol} liveDecision={decision} />
-              </div>
+             <div style={styles.grid}>
+               <DecisionCard symbol={symbol} liveDecision={decision} />
+               <CandlestickChart symbol={symbol} trades={[]} />
+             </div>
             )}
             {tab === 'backtest' && <EquityChart symbol={symbol} />}
             {tab === 'history'  && <HistoryTable symbol={symbol} />}
@@ -116,7 +119,7 @@ const styles = {
   header:      { display:'flex', alignItems:'center', gap:20, padding:'12px 24px',
                  borderBottom:'1px solid #2a2a3e', flexWrap:'wrap', flexShrink:0 },
   logo:        { display:'flex', alignItems:'center', gap:8 },
-  logoIcon:    { fontSize:22, color:'#7c6af7' },
+  logoImg:     { width:32, height:32 },
   logoText:    { fontSize:18, fontWeight:700 },
   searchForm:  { display:'flex', gap:6 },
   searchInput: { background:'#2a2a3e', border:'1px solid #44445a', borderRadius:6,

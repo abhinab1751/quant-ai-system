@@ -1,19 +1,20 @@
-import json
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import TimeSeriesSplit
 
 from models.prediction_model import add_features, FEATURE_COLS
 
-MIN_TRAIN_ROWS  = 55
-WARMUP_ROWS     = 15
-CONF_PERCENTILE = 50   
+MIN_TRAIN_ROWS  = 60    
+WARMUP_ROWS     = 20    
+CONF_PERCENTILE = 50    
 RF_PARAMS = dict(
-    n_estimators     = 100,
-    max_depth        = 5,
-    min_samples_leaf = 8,
+    n_estimators     = 200,
+    max_depth        = 6,
+    min_samples_leaf = 6,
+    max_features     = "sqrt",
     class_weight     = "balanced",
     random_state     = 42,
 )
@@ -24,19 +25,22 @@ class BacktestEngine:
     def __init__(self, initial_capital: float = 10_000.0):
         self.initial_capital = initial_capital
 
+
     def run(self, df: pd.DataFrame) -> dict:
         df = add_features(df.copy())
         df = df.reset_index(drop=False)
 
-        if len(df) < MIN_TRAIN_ROWS + WARMUP_ROWS + 5:
+        needed = MIN_TRAIN_ROWS + WARMUP_ROWS + 30
+        if len(df) < needed:
             raise ValueError(
-                f"Need ≥{MIN_TRAIN_ROWS + WARMUP_ROWS + 5} rows after feature engineering, "
-                f"got {len(df)}. Try a longer period (e.g. '1y')."
+                f"Need ≥{needed} rows after feature engineering, "
+                f"got {len(df)}. Use period='1y' or '2y'."
             )
 
         results = self._simulate(df)
         metrics = self._compute_metrics(results["equity_curve"], results["trades"])
         return {**metrics, **results}
+
 
     def _simulate(self, df: pd.DataFrame) -> dict:
         X_all  = df[FEATURE_COLS].values
@@ -56,21 +60,22 @@ class BacktestEngine:
         position                 = 0.0
         entry_price              = 0.0
         recent_confs: list[float] = []
+        pipe: Pipeline | None    = None
+        last_fit_at              = 0   
 
         for i in range(MIN_TRAIN_ROWS, len(df) - 1):
-            X_train, y_train = X_all[:i], y_all[:i]
-
-            if len(np.unique(y_train)) < 2:
-                equity_curve.append(
-                    round(self._pv(cash, position, closes[i]), 4)
-                )
-                continue
-
-            pipe = Pipeline([
-                ("scaler", StandardScaler()),
-                ("clf",    RandomForestClassifier(**RF_PARAMS)),
-            ])
-            pipe.fit(X_train, y_train)
+            if pipe is None or (i - last_fit_at) >= 30:
+                X_tr = X_all[:i]
+                y_tr = y_all[:i]
+                if len(np.unique(y_tr)) < 2:
+                    equity_curve.append(round(self._pv(cash, position, closes[i]), 4))
+                    continue
+                pipe = Pipeline([
+                    ("scaler", StandardScaler()),
+                    ("clf",    RandomForestClassifier(**RF_PARAMS)),
+                ])
+                pipe.fit(X_tr, y_tr)
+                last_fit_at = i
 
             x_today = X_all[i].reshape(1, -1)
             pred    = int(pipe.predict(x_today)[0])
@@ -80,11 +85,9 @@ class BacktestEngine:
             recent_confs.append(conf)
             if len(recent_confs) > WARMUP_ROWS:
                 recent_confs.pop(0)
-
             threshold = (
                 float(np.percentile(recent_confs, CONF_PERCENTILE))
-                if len(recent_confs) >= WARMUP_ROWS
-                else 0.50
+                if len(recent_confs) >= WARMUP_ROWS else 0.50
             )
 
             today_close    = float(closes[i])
@@ -139,7 +142,6 @@ class BacktestEngine:
 
         return {"equity_curve": equity_curve, "trades": trades}
 
-    
 
     def _compute_metrics(self, equity_curve: list, trades: list) -> dict:
         curve        = np.array(equity_curve, dtype=float)

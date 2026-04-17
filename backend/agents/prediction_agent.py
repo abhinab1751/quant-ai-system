@@ -15,16 +15,18 @@ from agents.data_agent import DataAgent
 MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "saved_models")
 os.makedirs(MODEL_DIR, exist_ok=True)
 
+MODEL_VERSION = "v3"
+
 
 def _model_path(symbol: str) -> str:
-    return os.path.join(MODEL_DIR, f"{symbol.upper()}_v2.joblib")
+    return os.path.join(MODEL_DIR, f"{symbol.upper()}_{MODEL_VERSION}.joblib")
 
 
 def _build_ensemble() -> Pipeline:
     rf = RandomForestClassifier(
         n_estimators=300,
-        max_depth=6,
-        min_samples_leaf=8,
+        max_depth=7,
+        min_samples_leaf=6,
         max_features="sqrt",
         class_weight="balanced",
         random_state=42,
@@ -38,20 +40,17 @@ def _build_ensemble() -> Pipeline:
         random_state=42,
     )
     lr = LogisticRegression(
-        C=0.5,
+        C=1.0,
         class_weight="balanced",
-        max_iter=1000,
+        max_iter=2000,
         random_state=42,
     )
-
     voting = VotingClassifier(
         estimators=[("rf", rf), ("gb", gb), ("lr", lr)],
         voting="soft",
-        weights=[3, 3, 1],   
+        weights=[3, 3, 1],
     )
-
     calibrated = CalibratedClassifierCV(voting, cv=3, method="isotonic")
-
     return Pipeline([
         ("scaler", StandardScaler()),
         ("clf",    calibrated),
@@ -63,6 +62,8 @@ class PredictionAgent:
     def __init__(self):
         self.data_agent = DataAgent()
         self._pipelines: dict[str, Pipeline] = {}
+        self._cv_scores:  dict[str, dict]    = {}
+
 
 
     def train(self, symbol: str, force: bool = False) -> dict:
@@ -75,17 +76,18 @@ class PredictionAgent:
         df = self.data_agent.get_historical_data(symbol, period="2y")
         df = add_features(df)
 
-        X, y = df[FEATURE_COLS].values, df["target"].values
+        X = df[FEATURE_COLS].values
+        y = df["target"].values
 
-        tscv      = TimeSeriesSplit(n_splits=6)
-        cv_acc    = []
-        cv_f1     = []
-
-        from sklearn.ensemble import RandomForestClassifier as _RF
-        quick = Pipeline([
+        tscv   = TimeSeriesSplit(n_splits=6)
+        cv_acc = []
+        cv_f1  = []
+        quick  = Pipeline([
             ("scaler", StandardScaler()),
-            ("clf", _RF(n_estimators=100, max_depth=5,
-                        class_weight="balanced", random_state=42, n_jobs=-1)),
+            ("clf", RandomForestClassifier(
+                n_estimators=150, max_depth=6,
+                class_weight="balanced", random_state=42, n_jobs=-1
+            )),
         ])
         for tr_idx, val_idx in tscv.split(X):
             quick.fit(X[tr_idx], y[tr_idx])
@@ -99,7 +101,7 @@ class PredictionAgent:
         joblib.dump(pipeline, path)
         self._pipelines[symbol] = pipeline
 
-        return {
+        result = {
             "status":           "trained",
             "symbol":           symbol,
             "n_features":       len(FEATURE_COLS),
@@ -108,7 +110,8 @@ class PredictionAgent:
             "cv_accuracy_std":  round(float(np.std(cv_acc)),  4),
             "cv_f1_mean":       round(float(np.mean(cv_f1)),  4),
         }
-
+        self._cv_scores[symbol] = result
+        return result
 
     def predict(self, symbol: str) -> tuple[int, float]:
         if symbol not in self._pipelines:
@@ -124,8 +127,8 @@ class PredictionAgent:
 
         latest     = df[FEATURE_COLS].iloc[-1].values.reshape(1, -1)
         prediction = int(pipeline.predict(latest)[0])
-        confidence = float(max(pipeline.predict_proba(latest)[0]))
-
+        proba      = pipeline.predict_proba(latest)[0]
+        confidence = float(max(proba))
         return prediction, confidence
 
 
@@ -133,18 +136,32 @@ class PredictionAgent:
         if symbol not in self._pipelines:
             self.train(symbol)
         try:
-            calib   = self._pipelines[symbol].named_steps["clf"]
+            pipe    = self._pipelines[symbol]
+            calib   = pipe.named_steps["clf"]
             voting  = calib.calibrated_classifiers_[0].estimator
             rf      = dict(voting.named_estimators_)["rf"]
             imp     = rf.feature_importances_
-            return dict(sorted(zip(FEATURE_COLS, imp.tolist()),
-                               key=lambda x: x[1], reverse=True))
-        except Exception:
-            return {}
+            return dict(sorted(
+                zip(FEATURE_COLS, imp.tolist()),
+                key=lambda x: x[1], reverse=True
+            ))
+        except Exception as e:
+            try:
+                pipe = self._pipelines[symbol]
+                rf   = pipe.named_steps["clf"].estimators_[0]
+                imp  = rf.feature_importances_
+                return dict(sorted(zip(FEATURE_COLS, imp.tolist()),
+                                   key=lambda x: x[1], reverse=True))
+            except Exception:
+                return {f: 1/len(FEATURE_COLS) for f in FEATURE_COLS}
+
+    def get_cv_scores(self, symbol: str) -> dict:
+        return self._cv_scores.get(symbol, {})
 
     def delete_model(self, symbol: str) -> bool:
         path = _model_path(symbol)
         self._pipelines.pop(symbol, None)
+        self._cv_scores.pop(symbol, None)
         if os.path.exists(path):
             os.remove(path)
             return True
