@@ -12,6 +12,7 @@ import MarketHeatmap            from './components/MarketHeatmap'
 import CandlestickChart         from './components/CandlestickChart'
 import { useStockStream }       from './hooks/useStockStream'
 import { useToasts, ToastContainer, toast } from './components/Toast'
+import logo from './assets/candleStick.png'
 
 if (!document.getElementById('cb-fonts')) {
   const l = document.createElement('link')
@@ -130,16 +131,24 @@ function PlusIcon() {
 function LogoIcon() {
   return (
     <div style={{
-      width: 36, height: 36, borderRadius: 10,
-      background: `linear-gradient(135deg, ${C.blue}, #60A5FA)`,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      boxShadow: `0 4px 12px ${C.blue}40`,
-      flexShrink: 0,
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      background: 'transparent',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden'
     }}>
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-        <path d="M12 2L4 7v10l8 5 8-5V7l-8-5z" fill="white" fillOpacity="0.9"/>
-        <path d="M12 8l4 2.5V16L12 18.5 8 16v-5.5L12 8z" fill="white" fillOpacity="0.5"/>
-      </svg>
+      <img
+        src={logo}
+        alt="QuantAI"
+        style={{
+          width: '70%',
+          height: '70%',
+          objectFit: 'contain'
+        }}
+      />
     </div>
   )
 }
