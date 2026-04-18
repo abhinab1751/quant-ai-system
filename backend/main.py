@@ -11,14 +11,22 @@ from agents.data_agent       import DataAgent
 from db.database   import init_db
 from db.db_service import save_prediction, save_price, get_decision_history, get_action_summary
 from core.ws.scheduler import start_scheduler, stop_scheduler
+from api.routes.paper import router as paper_router                 
+from db.paper_models import init_paper_tables                       
+from core.ws.paper_scheduler import (                               
+    start_paper_scheduler, stop_paper_scheduler                     
+) 
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    init_paper_tables() 
     start_scheduler()
+    start_paper_scheduler()
     yield
     stop_scheduler()
+    stop_paper_scheduler()
 
 
 app = FastAPI(title="Quant AI System", version="6.0.0", lifespan=lifespan)
@@ -32,6 +40,7 @@ app.include_router(prediction.router, prefix="/prediction")
 app.include_router(news.router,       prefix="/news")
 app.include_router(backtest_router,   prefix="/backtest")
 app.include_router(ws_router,         prefix="/ws")
+app.include_router(paper_router,      prefix="/paper")
 
 
 @app.get("/")

@@ -12,6 +12,7 @@ import MarketHeatmap            from './components/MarketHeatmap'
 import CandlestickChart         from './components/CandlestickChart'
 import { useStockStream }       from './hooks/useStockStream'
 import { useToasts, ToastContainer, toast } from './components/Toast'
+import PaperTrading from './components/PaperTrading'
 import logo from './assets/candleStick.png'
 
 if (!document.getElementById('cb-fonts')) {
@@ -43,6 +44,7 @@ const NAV = [
   { id: 'overview',  label: 'Dashboard',    icon: GridIcon   },
   { id: 'portfolio', label: 'My Wallet',    icon: WalletIcon },
   { id: 'backtest',  label: 'Trade',        icon: TradeIcon  },
+  { id: 'paper',     label: 'Paper Trade',  icon: PaperIcon  },
   { id: 'heatmap',   label: 'Exchange',     icon: ExchIcon   },
   { id: 'history',   label: 'History',      icon: HistIcon   },
   { id: 'model',     label: 'Analytics',    icon: ChartIcon  },
@@ -400,7 +402,7 @@ export default function App() {
           {tab === 'history'   && <HistoryTable symbol={symbol} />}
           {tab === 'model'     && <FeatureChart symbol={symbol} />}
           {tab === 'ai'        && <AIChat symbol={symbol} decisionData={decision} />}
-
+          {tab === 'paper'     && (<PaperTrading activeSymbol={symbol}  liveDecision={decision} />)}
         </main>
       </div>
 
@@ -435,5 +437,18 @@ function NavItem({ item, active, onClick }) {
       <Icon active={active} />
       {item.label}
     </button>
+  )
+}
+
+function PaperIcon({ active }) {
+  const c = active ? C.blue : C.text2
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <line x1="16" y1="13" x2="8" y2="13"/>
+      <line x1="16" y1="17" x2="8" y2="17"/>
+      <polyline points="10 9 9 9 8 9"/>
+    </svg>
   )
 }
