@@ -1,10 +1,11 @@
 import json
 from fastapi import APIRouter, HTTPException, Query
+from sqlalchemy import select
 
 from agents.data_agent import DataAgent
 from services.backtest_engine import BacktestEngine
-from db.database import db
-from db.backtest_model import BacktestRun
+from db.database import SessionLocal
+from db.database import BacktestRun
 
 router = APIRouter()
 data_agent = DataAgent()
@@ -30,8 +31,8 @@ def run_backtest(
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
-    with db:
-        run = BacktestRun.create(
+    with SessionLocal() as db:
+        run = BacktestRun(
             symbol           = sym,
             initial_capital  = initial_capital,
             final_value      = results["final_value"],
@@ -43,6 +44,9 @@ def run_backtest(
             equity_curve     = json.dumps(results["equity_curve"]),
             trade_log        = json.dumps(results["trades"]),
         )
+        db.add(run)
+        db.commit()
+        db.refresh(run)
 
     return {
         "symbol":           sym,
@@ -61,12 +65,17 @@ def run_backtest(
 
 @router.get("/history/{symbol}")
 def backtest_history(symbol: str, limit: int = Query(10, ge=1, le=100)):
-    rows = (
-        BacktestRun.select()
-        .where(BacktestRun.symbol == symbol.upper())
-        .order_by(BacktestRun.created_at.desc())
-        .limit(limit)
-    )
+    with SessionLocal() as db:
+        rows = (
+            db.execute(
+                select(BacktestRun)
+                .where(BacktestRun.symbol == symbol.upper())
+                .order_by(BacktestRun.created_at.desc())
+                .limit(limit)
+            )
+            .scalars()
+            .all()
+        )
     return {
         "symbol": symbol.upper(),
         "runs": [
@@ -88,11 +97,16 @@ def backtest_history(symbol: str, limit: int = Query(10, ge=1, le=100)):
 
 @router.get("/run/{symbol}/{run_id}")
 def get_run_detail(symbol: str, run_id: int):
-    try:
-        run = BacktestRun.get(
-            (BacktestRun.id == run_id) & (BacktestRun.symbol == symbol.upper())
+    with SessionLocal() as db:
+        run = (
+            db.execute(
+                select(BacktestRun)
+                .where((BacktestRun.id == run_id) & (BacktestRun.symbol == symbol.upper()))
+            )
+            .scalars()
+            .first()
         )
-    except BacktestRun.DoesNotExist:
+    if not run:
         raise HTTPException(status_code=404, detail="Run not found")
 
     return {

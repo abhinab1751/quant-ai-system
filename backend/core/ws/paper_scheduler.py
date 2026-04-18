@@ -10,11 +10,10 @@ Background tasks for the Paper Trading Simulator:
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from sqlalchemy import select
 
 from agents.data_agent import DataAgent
-from db.paper_models import PaperSession, PaperOrder
-from db.database import db
+from db.database import SessionLocal, PaperSession, PaperOrder
 from services.paper_trading_service import paper_service
 
 logger     = logging.getLogger(__name__)
@@ -44,9 +43,17 @@ async def _snapshot_loop() -> None:
     while True:
         await asyncio.sleep(SNAPSHOT_INTERVAL)
         try:
-            sessions = list(PaperSession.select().where(PaperSession.is_active == True))
-            for session in sessions:
-                await asyncio.to_thread(paper_service.record_snapshot, session.id)
+            with SessionLocal() as db:
+                session_ids = [
+                    s.id
+                    for s in db.execute(
+                        select(PaperSession).where(PaperSession.is_active.is_(True))
+                    )
+                    .scalars()
+                    .all()
+                ]
+            for session_id in session_ids:
+                await asyncio.to_thread(paper_service.record_snapshot, session_id)
         except asyncio.CancelledError:
             return
         except Exception as e:
@@ -56,20 +63,32 @@ async def _limit_order_loop() -> None:
     while True:
         await asyncio.sleep(LIMIT_CHECK_INTERVAL)
         try:
-            pending = list(
-                PaperOrder.select()
-                .where(PaperOrder.status == "PENDING")
-                .where(PaperOrder.order_type.in_(["LIMIT", "STOP"]))
-            )
-            for order in pending:
-                await asyncio.to_thread(_check_and_fill, order)
+            with SessionLocal() as db:
+                pending_ids = [
+                    o.id
+                    for o in db.execute(
+                        select(PaperOrder).where(
+                            (PaperOrder.status == "PENDING")
+                            & (PaperOrder.order_type.in_(["LIMIT", "STOP"]))
+                        )
+                    )
+                    .scalars()
+                    .all()
+                ]
+            for order_id in pending_ids:
+                await asyncio.to_thread(_check_and_fill, order_id)
         except asyncio.CancelledError:
             return
         except Exception as e:
             logger.warning(f"[PaperScheduler] Limit check error: {e}")
 
 
-def _check_and_fill(order: PaperOrder) -> None:
+def _check_and_fill(order_id: int) -> None:
+    with SessionLocal() as db:
+        order = db.get(PaperOrder, order_id)
+        if not order or order.status != "PENDING":
+            return
+
     price = data_agent.get_current_price(order.symbol)
     if price is None:
         return
@@ -89,13 +108,17 @@ def _check_and_fill(order: PaperOrder) -> None:
             triggered = True
 
     if triggered:
-        session = order.session
-        with db:
-            try:
-                paper_service._fill_order(session, order, price)
-                logger.info(f"[PaperScheduler] Filled {order.order_type} {order.side} "
-                            f"{order.quantity} {order.symbol} @ {price}")
-            except Exception as e:
-                logger.warning(f"[PaperScheduler] Fill failed for order {order.id}: {e}")
-                order.status = "REJECTED"
-                order.save()
+        session = db.get(PaperSession, order.session_id)
+        if not session:
+            return
+        try:
+            paper_service._fill_order(session, order, price, db)
+            db.commit()
+            logger.info(
+                f"[PaperScheduler] Filled {order.order_type} {order.side} "
+                f"{order.quantity} {order.symbol} @ {price}"
+            )
+        except Exception as e:
+            logger.warning(f"[PaperScheduler] Fill failed for order {order.id}: {e}")
+            order.status = "REJECTED"
+            db.commit()

@@ -3,9 +3,10 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy import select, update
 
 from services.paper_trading_service import paper_service, RiskError
-from db.paper_models import PaperSession, PaperOrder
+from db.database import SessionLocal, PaperSession, PaperOrder
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["paper-trading"])
@@ -38,17 +39,22 @@ def create_session(req: CreateSessionRequest):
 
 @router.get("/sessions", summary="List all sessions")
 def list_sessions():
-    sessions = PaperSession.select().order_by(PaperSession.created_at.desc())
+    with SessionLocal() as db:
+        sessions = (
+            db.execute(select(PaperSession).order_by(PaperSession.created_at.desc()))
+            .scalars()
+            .all()
+        )
     return [_session_dict(s) for s in sessions]
 
 
 @router.get("/sessions/{session_id}", summary="Get session details")
 def get_session(session_id: int):
-    try:
-        session = PaperSession.get_by_id(session_id)
-        return _session_dict(session)
-    except PaperSession.DoesNotExist:
+    with SessionLocal() as db:
+        session = db.get(PaperSession, session_id)
+    if not session:
         raise HTTPException(404, f"Session {session_id} not found")
+    return _session_dict(session)
 
 
 @router.delete("/sessions/{session_id}/reset", summary="Reset session")
@@ -62,14 +68,14 @@ def reset_session(session_id: int):
 
 @router.post("/sessions/{session_id}/activate", summary="Set active session")
 def activate_session(session_id: int):
-    try:
-        PaperSession.update(is_active=False).execute()
-        session = PaperSession.get_by_id(session_id)
+    with SessionLocal() as db:
+        session = db.get(PaperSession, session_id)
+        if not session:
+            raise HTTPException(404, f"Session {session_id} not found")
+        db.execute(update(PaperSession).values(is_active=False))
         session.is_active = True
-        session.save()
+        db.commit()
         return {"message": f"Session '{session.name}' is now active"}
-    except PaperSession.DoesNotExist:
-        raise HTTPException(404, f"Session {session_id} not found")
 
 @router.post("/orders", summary="Place a paper order")
 def place_order(req: PlaceOrderRequest):
@@ -115,36 +121,40 @@ def ai_order(req: AIOrderRequest):
 
 @router.get("/sessions/{session_id}/orders", summary="Order history")
 def get_orders(session_id: int, limit: int = Query(50, le=500)):
-    try:
-        session = PaperSession.get_by_id(session_id)
-        orders  = (
-            PaperOrder.select()
-            .where(PaperOrder.session == session)
-            .order_by(PaperOrder.created_at.desc())
-            .limit(limit)
+    with SessionLocal() as db:
+        session = db.get(PaperSession, session_id)
+        if not session:
+            raise HTTPException(404, "Session not found")
+        orders = (
+            db.execute(
+                select(PaperOrder)
+                .where(PaperOrder.session_id == session_id)
+                .order_by(PaperOrder.created_at.desc())
+                .limit(limit)
+            )
+            .scalars()
+            .all()
         )
         return [_order_dict(o) for o in orders]
-    except PaperSession.DoesNotExist:
-        raise HTTPException(404, "Session not found")
 
 
 @router.delete("/orders/{order_id}", summary="Cancel a pending order")
 def cancel_order(order_id: int):
-    try:
-        order = PaperOrder.get_by_id(order_id)
+    with SessionLocal() as db:
+        order = db.get(PaperOrder, order_id)
+        if not order:
+            raise HTTPException(404, f"Order {order_id} not found")
         if order.status != "PENDING":
             raise HTTPException(400, f"Order {order_id} is already {order.status}")
         order.status = "CANCELLED"
-        order.save()
+        db.commit()
         return {"message": f"Order {order_id} cancelled"}
-    except PaperOrder.DoesNotExist:
-        raise HTTPException(404, f"Order {order_id} not found")
 
 @router.get("/sessions/{session_id}/portfolio", summary="Full portfolio state")
 def get_portfolio(session_id: int):
     try:
         return paper_service.get_portfolio_state(session_id)
-    except PaperSession.DoesNotExist:
+    except ValueError:
         raise HTTPException(404, "Session not found")
 
 
@@ -158,7 +168,7 @@ def get_positions(session_id: int):
 def get_trades(session_id: int, limit: int = Query(100, le=1000)):
     try:
         return {"trades": paper_service.get_trade_history(session_id, limit)}
-    except PaperSession.DoesNotExist:
+    except ValueError:
         raise HTTPException(404, "Session not found")
 
 
@@ -166,7 +176,7 @@ def get_trades(session_id: int, limit: int = Query(100, le=1000)):
 def get_equity(session_id: int, limit: int = Query(500, le=5000)):
     try:
         return {"equity": paper_service.get_equity_curve(session_id, limit)}
-    except PaperSession.DoesNotExist:
+    except ValueError:
         raise HTTPException(404, "Session not found")
 
 
@@ -174,7 +184,7 @@ def get_equity(session_id: int, limit: int = Query(500, le=5000)):
 def get_benchmark(session_id: int):
     try:
         return paper_service.get_benchmark_comparison(session_id)
-    except PaperSession.DoesNotExist:
+    except ValueError:
         raise HTTPException(404, "Session not found")
 
 
@@ -188,7 +198,7 @@ def force_snapshot(session_id: int):
             "positions_value": round(snap.positions_value, 2),
             "recorded_at":     snap.recorded_at.isoformat(),
         }
-    except PaperSession.DoesNotExist:
+    except ValueError:
         raise HTTPException(404, "Session not found")
 
 def _session_dict(s: PaperSession) -> dict:

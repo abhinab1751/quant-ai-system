@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI, Query
 from contextlib import asynccontextmanager
 
@@ -7,21 +9,22 @@ from api.routes.ws       import router as ws_router
 from agents.prediction_agent import PredictionAgent
 from agents.research_agent   import ResearchAgent
 from agents.decision_agent   import decide_action
+from db.database import init_db, save_prediction, save_price, get_decision_history, get_action_summary
+from core.markets import market_utils, EXCHANGES
 from agents.data_agent       import DataAgent
-from db.database   import init_db
-from db.db_service import save_prediction, save_price, get_decision_history, get_action_summary
 from core.ws.scheduler import start_scheduler, stop_scheduler
 from api.routes.paper import router as paper_router                 
-from db.paper_models import init_paper_tables                       
 from core.ws.paper_scheduler import (                               
     start_paper_scheduler, stop_paper_scheduler                     
 ) 
+from api.routes.market import router as market_router_v2
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    init_paper_tables() 
     start_scheduler()
     start_paper_scheduler()
     yield
@@ -36,6 +39,7 @@ research_agent   = ResearchAgent()
 data_agent       = DataAgent()
 
 app.include_router(market.router,     prefix="/market")
+app.include_router(market_router_v2,  prefix="/market")
 app.include_router(prediction.router, prefix="/prediction")
 app.include_router(news.router,       prefix="/news")
 app.include_router(backtest_router,   prefix="/backtest")
@@ -79,13 +83,29 @@ def get_ohlcv(symbol: str, period: str = Query("6mo")):
 def get_decision(symbol: str):
     sym = symbol.upper()
 
-    prediction_agent.train(sym)
-    pred, ml_confidence = prediction_agent.predict(sym)
-    ml_prediction = "UP" if pred == 1 else "DOWN"
+    ml_prediction = "DOWN"
+    ml_confidence = 0.5
+    sentiment_label = "NEUTRAL"
+    sentiment_confidence = 0.0
+    fear_greed = {"value": 50, "label": "NEUTRAL"}
 
-    articles = research_agent.fetch_news(sym)
-    sentiment_label, sentiment_confidence = research_agent.analyze_sentiment(articles)
-    fear_greed = data_agent.get_fear_greed()
+    try:
+        prediction_agent.train(sym)
+        pred, ml_confidence = prediction_agent.predict(sym)
+        ml_prediction = "UP" if pred == 1 else "DOWN"
+    except Exception as e:
+        logger.warning(f"Decision ML pipeline failed for {sym}: {e}")
+
+    try:
+        articles = research_agent.fetch_news(sym)
+        sentiment_label, sentiment_confidence = research_agent.analyze_sentiment(articles)
+    except Exception as e:
+        logger.warning(f"Decision sentiment pipeline failed for {sym}: {e}")
+
+    try:
+        fear_greed = data_agent.get_fear_greed()
+    except Exception as e:
+        logger.warning(f"Fear/Greed fetch failed for {sym}: {e}")
 
     decision = decide_action(
         ml_prediction, ml_confidence,
@@ -93,17 +113,24 @@ def get_decision(symbol: str):
         fear_greed,
     )
 
-    price = data_agent.get_current_price(sym)
-    if price:
-        save_price(sym, price)
+    price = None
+    try:
+        price = data_agent.get_current_price(sym)
+        if price is not None:
+            save_price(sym, price)
+    except Exception as e:
+        logger.warning(f"Live price fetch/save failed for {sym}: {e}")
 
-    save_prediction(
-        symbol=sym, ml_prediction=ml_prediction,
-        ml_confidence=round(ml_confidence, 4),
-        sentiment=sentiment_label,
-        sent_confidence=round(sentiment_confidence, 4),
-        action=decision["action"], reason=decision["reason"],
-    )
+    try:
+        save_prediction(
+            symbol=sym, ml_prediction=ml_prediction,
+            ml_confidence=round(ml_confidence, 4),
+            sentiment=sentiment_label,
+            sent_confidence=round(sentiment_confidence, 4),
+            action=decision["action"], reason=decision["reason"],
+        )
+    except Exception as e:
+        logger.warning(f"Decision persistence failed for {sym}: {e}")
 
     return {
         "symbol": sym, "price": price,
@@ -124,3 +151,7 @@ def get_history(symbol: str, limit: int = 50):
 @app.get("/history/{symbol}/summary")
 def get_summary(symbol: str):
     return {"symbol": symbol.upper(), "summary": get_action_summary(symbol)}
+
+@app.get("/markets")
+def get_all_markets():
+    return {"exchanges": market_utils.all_exchange_status()}
