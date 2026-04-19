@@ -379,7 +379,7 @@ export default function PaperTrading({ activeSymbol = 'AAPL', liveDecision = nul
 
       {/* ── Order ticket (collapsible) ── */}
       {showTicket && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
           <OrderTicket symbol={activeSymbol} pt={pt} onClose={() => setShowTicket(false)} />
 
           {/* Recent fill confirmation */}

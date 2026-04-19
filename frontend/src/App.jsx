@@ -1,4 +1,4 @@
-import { useState, useEffect }          from 'react'
+import { useState, useEffect, useRef }  from 'react'
 import { C, FONTS, RADIUS, THEME_CSS }  from './components/theme'
 import { useTheme }                     from './hooks/useTheme'
 import { ThemeToggle }                  from './components/ThemeToggle'
@@ -14,10 +14,12 @@ import PortfolioTracker from './components/PortfolioTracker'
 import MarketHeatmap    from './components/MarketHeatmap'
 import CandlestickChart from './components/CandlestickChart'
 import PaperTrading     from './components/PaperTrading'
+import TradeIntelligence from './components/TradeIntelligence'
 import LandingPage from './pages/LandingPage'
 import { useStockStream }                            from './hooks/useStockStream'
 import { useToasts, ToastContainer, toast }          from './components/Toast'
 import candleStickLogo                               from './assets/candleStick.png'
+
 
 if (!document.getElementById('qai-fonts')) {
   const l = document.createElement('link')
@@ -44,6 +46,54 @@ const GLOBAL_CSS = `
   @keyframes cb-fade-in  { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
   @keyframes cb-slide-in { from { transform:translateX(110%); opacity:0; } to { transform:none; opacity:1; } }
   @keyframes cb-pulse    { 0%,100%{ opacity:1; } 50%{ opacity:.4; } }
+
+  .qai-dashboard-shell { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  .qai-dashboard-body { display: flex; flex: 1; overflow: hidden; min-width: 0; min-height: 0; }
+  .qai-dashboard-sidebar { height: 100%; overflow-y: auto; }
+  .qai-dashboard-main { flex: 1; height: 100%; overflow-y: auto; min-width: 0; min-height: 0; padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+  .qai-overview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+  @media (max-width: 1100px) {
+    .qai-dashboard-shell { min-height: 100vh; height: auto; overflow-x: hidden; overflow-y: auto; }
+    .qai-dashboard-header {
+      height: auto !important;
+      padding: 12px 14px !important;
+      gap: 12px !important;
+      align-items: stretch !important;
+    }
+    .qai-dashboard-header-inner {
+      width: 100%;
+      flex-wrap: wrap;
+      gap: 12px !important;
+      padding: 0 !important;
+    }
+    .qai-dashboard-logo {
+      width: auto !important;
+      border-right: none !important;
+      padding: 0 !important;
+      height: auto !important;
+    }
+    .qai-dashboard-search { flex: 1 1 260px; max-width: none !important; min-width: 220px; }
+    .qai-dashboard-actions { margin-left: 0 !important; width: 100%; justify-content: flex-end; flex-wrap: wrap; }
+    .qai-dashboard-body { flex-direction: column; overflow: visible; min-height: auto; }
+    .qai-dashboard-sidebar {
+      width: 100% !important;
+      max-height: none !important;
+      border-right: none !important;
+      border-bottom: 1px solid var(--qai-border);
+      overflow: visible !important;
+      height: auto !important;
+    }
+    .qai-dashboard-main { height: auto !important; padding: 16px !important; overflow: visible !important; }
+    .qai-overview-grid { grid-template-columns: 1fr !important; }
+    .qai-dashboard-topbar { flex-direction: column; align-items: flex-start !important; gap: 12px; }
+  }
+
+  @media (max-width: 720px) {
+    .qai-dashboard-main { padding: 12px !important; gap: 14px !important; }
+    .qai-dashboard-actions > * { flex: 1 1 100%; }
+    .qai-dashboard-actions button { width: 100%; }
+  }
 `
 
 function getStoredUser() {
@@ -93,6 +143,7 @@ const NAV = [
   { id: 'history',   label: 'History',     icon: HistIcon   },
   { id: 'model',     label: 'Analytics',   icon: ChartIcon  },
   { id: 'ai',        label: 'AI Terminal', icon: AIIcon     },
+  { id: 'intelligence',label: 'Trade Brief',   icon: BrainIcon  },
 ]
 
 function Dashboard({ user, onLogout, isDark, toggle, theme, setTheme }) {
@@ -100,6 +151,7 @@ function Dashboard({ user, onLogout, isDark, toggle, theme, setTheme }) {
   const [input,  setInput]  = useState('AAPL')
   const [tab,    setTab]    = useState('overview')
   const [showUserMenu, setShowUserMenu] = useState(false)
+  const mainRef = useRef(null)
 
   const { price, decision, connected, error } = useStockStream(symbol)
   const { toasts } = useToasts()
@@ -109,20 +161,26 @@ function Dashboard({ user, onLogout, isDark, toggle, theme, setTheme }) {
     toast({ action: decision.action, symbol, message: decision.reason || `${decision.action} signal`, duration: 7000 })
   }, [decision])
 
+  useEffect(() => {
+    const main = mainRef.current
+    if (!main) return
+    main.scrollTo({ top: 0, behavior: 'auto' })
+  }, [tab])
+
   const selectSymbol = (s) => { setSymbol(s); setInput(s) }
   const handleSearch = (e) => { e.preventDefault(); const s = input.trim().toUpperCase(); if (s) selectSymbol(s) }
 
   return (
-    <div style={{ minHeight: '100vh', background: C.pageBg, display: 'flex', flexDirection: 'column' }}>
+    <div className="qai-dashboard-shell" style={{ background: C.pageBg }}>
 
       {/* ── HEADER ── */}
-      <header style={{
+      <header className="qai-dashboard-header" style={{
         height: 64, background: C.headerBg, borderBottom: `1px solid ${C.border}`,
         display: 'flex', alignItems: 'center', gap: 16, padding: '0 20px 0 0',
         boxShadow: C.shadow, position: 'sticky', top: 0, zIndex: 200, flexShrink: 0,
       }}>
         {/* Logo */}
-        <div style={{
+        <div className="qai-dashboard-header-inner" style={{
           width: 240, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10,
           padding: '0 20px', borderRight: `1px solid ${C.border}`, height: '100%',
         }}>
@@ -137,7 +195,7 @@ function Dashboard({ user, onLogout, isDark, toggle, theme, setTheme }) {
         </div>
 
         {/* Search */}
-        <form onSubmit={handleSearch} style={{ flex: 1, maxWidth: 340, position: 'relative' }}>
+        <form className="qai-dashboard-search" onSubmit={handleSearch} style={{ flex: 1, maxWidth: 340, position: 'relative' }}>
           <div style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }}>
             <SearchIcon />
           </div>
@@ -150,7 +208,7 @@ function Dashboard({ user, onLogout, isDark, toggle, theme, setTheme }) {
 
         <PriceTicker symbol={symbol} priceData={price} connected={connected} compact />
 
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div className="qai-dashboard-actions" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
           <LiveClock />
           <ThemeToggle isDark={isDark} onToggle={toggle} />
 
@@ -224,11 +282,11 @@ function Dashboard({ user, onLogout, isDark, toggle, theme, setTheme }) {
       </header>
 
       {/* ── BODY ── */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      <div className="qai-dashboard-body">
         <aside style={{
           width: 240, flexShrink: 0, background: C.sidebarBg,
           borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', overflowY: 'auto',
-        }}>
+        }} className="qai-dashboard-sidebar">
           <Watchlist activeSymbol={symbol} onSelect={selectSymbol} />
           <nav style={{ padding: '4px 12px 12px' }}>
             <NavLabel>Main menu</NavLabel>
@@ -236,9 +294,9 @@ function Dashboard({ user, onLogout, isDark, toggle, theme, setTheme }) {
               <NavItem key={item.id} item={item} active={tab === item.id} onClick={() => setTab(item.id)} />
             ))}
             <NavLabel style={{ marginTop: 16 }}>Analytics</NavLabel>
-            {NAV.slice(4).map(item => (
-              <NavItem key={item.id} item={item} active={tab === item.id} onClick={() => setTab(item.id)} />
-            ))}
+              {NAV.slice(4).map(item => (   
+                <NavItem key={item.id} item={item} active={tab === item.id} onClick={() => setTab(item.id)} />
+              ))}
           </nav>
 
           {/* Theme selector */}
@@ -266,12 +324,8 @@ function Dashboard({ user, onLogout, isDark, toggle, theme, setTheme }) {
         </aside>
 
         {/* Main content */}
-        <main style={{
-          flex: 1, overflowY: 'auto', minWidth: 0,
-          padding: '24px', display: 'flex', flexDirection: 'column', gap: 20,
-          animation: 'cb-fade-in 0.25s ease',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <main ref={mainRef} className="qai-dashboard-main" style={{ animation: 'cb-fade-in 0.25s ease' }}>
+          <div className="qai-dashboard-topbar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
               <h1 style={{ fontSize: 22, fontWeight: 800, color: C.text0, letterSpacing: '-0.03em', lineHeight: 1 }}>
                 {NAV.find(n => n.id === tab)?.label || 'Dashboard'}
@@ -287,7 +341,7 @@ function Dashboard({ user, onLogout, isDark, toggle, theme, setTheme }) {
             )}
           </div>
 
-          {tab === 'overview'  && <div style={{ display:'flex', flexDirection:'column', gap:20 }}><div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20 }}><DecisionCard symbol={symbol} liveDecision={decision} /><AIChat symbol={symbol} decisionData={decision} /></div><CandlestickChart symbol={symbol} trades={[]} /></div>}
+          {tab === 'overview'  && <div style={{ display:'flex', flexDirection:'column', gap:20 }}><div className="qai-overview-grid"><DecisionCard symbol={symbol} liveDecision={decision} /><AIChat symbol={symbol} decisionData={decision} /></div><CandlestickChart symbol={symbol} trades={[]} /></div>}
           {tab === 'portfolio' && <PortfolioTracker />}
           {tab === 'paper'     && <PaperTrading activeSymbol={symbol} liveDecision={decision} />}
           {tab === 'backtest'  && <EquityChart symbol={symbol} />}
@@ -295,6 +349,7 @@ function Dashboard({ user, onLogout, isDark, toggle, theme, setTheme }) {
           {tab === 'history'   && <HistoryTable symbol={symbol} />}
           {tab === 'model'     && <FeatureChart symbol={symbol} />}
           {tab === 'ai'        && <AIChat symbol={symbol} decisionData={decision} />}
+          {tab === 'intelligence' && <TradeIntelligence symbol={symbol} />}
         </main>
       </div>
       <ToastContainer toasts={toasts} />
@@ -335,6 +390,16 @@ function LiveClock() {
       </div>
       <span style={{fontSize:12,fontWeight:500,color:C.text2,fontFamily:FONTS.mono}}>{t.toLocaleTimeString('en-US',{hour12:false})}</span>
     </div>
+  )
+}
+function BrainIcon({ active }) {
+  const c = active ? C.blue : C.text2
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c}
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.46 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/>
+      <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.46 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/>
+    </svg>
   )
 }
 function GridIcon({active}){const c=active?C.blue:C.text2;return(<svg width="18"height="18"viewBox="0 0 24 24"fill="none"stroke={c}strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><rect x="3"y="3"width="7"height="7"rx="1"/><rect x="14"y="3"width="7"height="7"rx="1"/><rect x="3"y="14"width="7"height="7"rx="1"/><rect x="14"y="14"width="7"height="7"rx="1"/></svg>)}

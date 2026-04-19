@@ -129,9 +129,22 @@ export default function AuthPage({ onSuccess, onBack, isDark, onToggle, initialM
       fontFamily:     FONTS.sans,
     }}>
       <style>{`
+        .auth-shell { min-height: 100vh; display: flex; flex-direction: column; }
+        .auth-topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 24px; }
+        .auth-topbar-left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .auth-content { flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px 16px; }
+        .auth-card { width: 100%; max-width: 420px; }
+        .auth-form-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+        @media (max-width: 720px) {
+          .auth-topbar { padding: 12px 14px; align-items: flex-start; }
+          .auth-content { padding: 24px 12px 32px; align-items: flex-start; }
+          .auth-card { max-width: none; }
+          .auth-form-two-col { grid-template-columns: 1fr; }
+        }
       `}</style>
       {/* Top bar */}
-      <header style={{
+      <header className="auth-topbar" style={{
         display:     'flex',
         alignItems:  'center',
         justifyContent: 'space-between',
@@ -140,7 +153,7 @@ export default function AuthPage({ onSuccess, onBack, isDark, onToggle, initialM
         borderBottom: `1px solid ${C.border}`,
         boxShadow:   C.shadow,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div className="auth-topbar-left" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {onBack && (
             <button
               type="button"
@@ -178,14 +191,14 @@ export default function AuthPage({ onSuccess, onBack, isDark, onToggle, initialM
       </header>
 
       {/* Center content */}
-      <div style={{
+      <div className="auth-content" style={{
         flex:           1,
         display:        'flex',
         alignItems:     'center',
         justifyContent: 'center',
         padding:        '40px 16px',
       }}>
-        <div style={{ width: '100%', maxWidth: 420 }}>
+        <div className="auth-card" style={{ width: '100%', maxWidth: 420 }}>
 
           {/* Hero text */}
           <div style={{ textAlign: 'center', marginBottom: 32 }}>
@@ -365,7 +378,7 @@ function SignupForm({ onSuccess, onSwitch }) {
 
   return (
     <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      <div className="auth-form-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <Field
           label="Email"
           type="email"

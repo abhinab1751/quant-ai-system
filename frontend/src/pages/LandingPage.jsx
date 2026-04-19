@@ -360,12 +360,39 @@ export default function LandingPage({ onLogin, onSignup, isDark = false, onToggl
           position: relative;
           z-index: 1;
         }
+
+        .lp-nav-inner { max-width:1280px; margin:0 auto; display:flex; align-items:center; gap:36px; padding:0 32px; height:64px; }
+        .lp-nav-links { display:flex; gap:28px; flex:1; }
+        .lp-nav-actions { display:flex; gap:10px; flex-shrink:0; }
+        .lp-hero-grid { max-width:1280px; margin:0 auto; display:grid; grid-template-columns:1fr 420px; gap:56px; padding:72px 32px 64px; align-items:start; }
+        .lp-market-grid { max-width:1280px; margin:0 auto; display:grid; grid-template-columns:1fr 1fr; gap:72px; align-items:center; }
+        .lp-market-panel { background:${T.cardBg}; border:1px solid ${T.border}; border-radius:20px; overflow:hidden; box-shadow:0 8px 40px rgba(15,23,42,.09); }
+        .lp-footer-inner { max-width:1280px; margin:0 auto; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; }
+
+        @media (max-width: 1120px) {
+          .lp-nav-inner { height:auto; padding:14px 20px; flex-wrap:wrap; gap:14px; }
+          .lp-nav-links { order:3; width:100%; justify-content:center; flex-wrap:wrap; gap:16px; }
+          .lp-nav-actions { width:100%; justify-content:flex-end; flex-wrap:wrap; }
+          .lp-hero-grid { grid-template-columns:1fr; gap:32px; padding:56px 20px 40px; }
+          .lp-market-grid { grid-template-columns:1fr; gap:28px; }
+        }
+
+        @media (max-width: 720px) {
+          .lp-nav-links { justify-content:flex-start; overflow-x:auto; padding-bottom:4px; }
+          .lp-nav-actions { justify-content:stretch; }
+          .lp-nav-actions button { flex:1 1 100%; }
+          .lp-hero-grid { padding:40px 14px 28px; }
+          .lp-hero-grid form { flex-direction:column; max-width:none !important; }
+          .lp-hero-grid form input { width:100%; }
+          .lp-market-panel { border-radius:16px; }
+          .lp-footer-inner { justify-content:center; text-align:center; }
+        }
       `}</style>
       <div className="lp-atmo" aria-hidden="true" />
 
       {/* NAV */}
       <nav style={{ position:'sticky', top:0, zIndex:200, background:T.navBg, borderBottom:`1px solid ${T.border}`, boxShadow: scrolled ? (isDark ? '0 2px 16px rgba(0,0,0,.55)' : '0 2px 16px rgba(15,23,42,.07)') : 'none', transition:'box-shadow .2s' }}>
-        <div style={{ maxWidth:1280, margin:'0 auto', display:'flex', alignItems:'center', gap:36, padding:'0 32px', height:64 }}>
+        <div className="lp-nav-inner">
           <div style={{ display:'flex', alignItems:'center', gap:9, flexShrink:0 }}>
             <img
               src={candleStickLogo}
@@ -374,12 +401,12 @@ export default function LandingPage({ onLogin, onSignup, isDark = false, onToggl
             />
             <span style={{ fontSize:19, fontWeight:900, color:T.text0, letterSpacing:'-.04em' }}>Quant<span style={{ color:T.blue }}>AI</span></span>
           </div>
-          <div style={{ display:'flex', gap:28, flex:1 }}>
+          <div className="lp-nav-links">
             {[['Features','features'],['Markets','markets'],['How It Works','how-it-works'],['Why QuantAI','why-quantai']].map(([l,id]) => (
               <button key={l} className="nav-a" onClick={() => scrollToSection(id)}>{l}</button>
             ))}
           </div>
-          <div style={{ display:'flex', gap:10, flexShrink:0 }}>
+          <div className="lp-nav-actions">
             <button
               type="button"
               onClick={onToggleTheme}
@@ -406,7 +433,7 @@ export default function LandingPage({ onLogin, onSignup, isDark = false, onToggl
 
       {/* HERO */}
       <section data-scroll-fx style={{ background:T.cardBg, borderBottom:`1px solid ${T.border}` }}>
-        <div style={{ maxWidth:1280, margin:'0 auto', display:'grid', gridTemplateColumns:'1fr 420px', gap:56, padding:'72px 32px 64px', alignItems:'start' }}>
+        <div className="lp-hero-grid">
 
           {/* Left */}
           <div style={{ animation:'fadeUp .6s both' }}>
@@ -447,7 +474,7 @@ export default function LandingPage({ onLogin, onSignup, isDark = false, onToggl
           </div>
 
           {/* Right — market panel */}
-          <div style={{ background:T.cardBg, border:`1px solid ${T.border}`, borderRadius:20, overflow:'hidden', boxShadow:'0 8px 40px rgba(15,23,42,.09)', animation:'fadeUp .6s .15s both' }}>
+          <div className="lp-market-panel" style={{ animation:'fadeUp .6s .15s both' }}>
             {/* Tabs */}
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'14px 20px', borderBottom:`1px solid ${T.border}` }}>
               <div style={{ display:'flex', gap:20 }}>
@@ -609,7 +636,7 @@ export default function LandingPage({ onLogin, onSignup, isDark = false, onToggl
 
       {/* MARKETS */}
       <section id="markets" data-scroll-fx style={{ background:T.cardBg, padding:'96px 32px', borderTop:`1px solid ${T.border}`, borderBottom:`1px solid ${T.border}` }}>
-        <div style={{ maxWidth:1280, margin:'0 auto', display:'grid', gridTemplateColumns:'1fr 1fr', gap:72, alignItems:'center' }}>
+        <div className="lp-market-grid">
           <div>
             <div className="section-eyebrow">Global Markets</div>
             <h2 className="section-h2">One platform,<br />every market</h2>
@@ -709,7 +736,7 @@ export default function LandingPage({ onLogin, onSignup, isDark = false, onToggl
 
       {/* FOOTER */}
       <footer data-scroll-fx style={{ background:isDark ? '#000000' : T.text0, padding:'36px 32px', borderTop: isDark ? `1px solid ${T.border}` : 'none' }}>
-        <div style={{ maxWidth:1280, margin:'0 auto', display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:16 }}>
+        <div className="lp-footer-inner">
           <div style={{ display:'flex', alignItems:'center', gap:8 }}>
             <img
               src={candleStickLogo}

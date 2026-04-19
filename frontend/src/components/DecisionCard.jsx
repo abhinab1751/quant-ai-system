@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getDecision } from '../api/client'
+import { getDecision, downloadDecisionReport } from '../api/client'
 import { C, FONTS, RADIUS, Card, CardHeader, Badge, Spinner } from './theme'
 
 const ACTION = {
@@ -14,13 +14,38 @@ export default function DecisionCard({ symbol, liveDecision }) {
   const [data,    setData]    = useState(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
+  const [reportLoading, setReportLoading] = useState(false)
+  const [reportError, setReportError] = useState(null)
 
   useEffect(() => {
     if (!symbol) return
     setLoading(true); setError(null)
+    setReportError(null)
     getDecision(symbol)
       .then(setData).catch(e => setError(e.message)).finally(() => setLoading(false))
   }, [symbol])
+
+  const onDownloadReport = async () => {
+    if (!symbol || reportLoading) return
+    setReportError(null)
+    setReportLoading(true)
+
+    try {
+      const { blob, filename } = await downloadDecisionReport(symbol)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      setReportError(e.message || 'Failed to build PDF report.')
+    } finally {
+      setReportLoading(false)
+    }
+  }
 
   const display = liveDecision ? {
     decision: { action: liveDecision.action, reason: liveDecision.reason, strength: liveDecision.strength, score: liveDecision.score, signals: liveDecision.signals },
@@ -106,8 +131,27 @@ export default function DecisionCard({ symbol, liveDecision }) {
           {display.decision?.reason || '—'}
         </div>
 
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+          <button onClick={onDownloadReport} disabled={reportLoading} style={{
+            border: `1px solid ${C.border}`,
+            background: reportLoading ? C.inputBg : C.cardBg,
+            color: reportLoading ? C.text3 : C.text1,
+            borderRadius: RADIUS.md,
+            padding: '7px 12px',
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: reportLoading ? 'not-allowed' : 'pointer',
+            fontFamily: FONTS.sans,
+          }}>
+            {reportLoading ? 'Building PDF...' : 'PDF Report'}
+          </button>
+          {reportError && (
+            <span style={{ fontSize: 11, color: C.red }}>{reportError}</span>
+          )}
+        </div>
+
         {/* Confidence bars */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 14, marginBottom: 16 }}>
           <ConfBar label="ML Confidence" pct={mlPct} color={C.blue} />
           <ConfBar label="Sentiment" pct={sentPct} color={C.amber} />
         </div>

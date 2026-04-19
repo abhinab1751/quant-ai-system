@@ -98,3 +98,75 @@ export const runBacktest = (symbol, capital = 10000) =>
 
 export const getBacktestHistory = (symbol) =>
   get(`/backtest/history/${symbol}`)
+
+export async function downloadDecisionReport(symbol) {
+  const token = getAccessToken()
+  if (!token) {
+    throw new Error('Please sign in to download a report.')
+  }
+
+  const endpoint = `${BASE}/decision/${encodeURIComponent(symbol)}/report`
+
+  let res = await fetch(endpoint, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  if (res.status === 401) {
+    const newToken = await refreshAccessToken()
+    if (newToken) {
+      res = await fetch(endpoint, {
+        headers: { Authorization: `Bearer ${newToken}` },
+      })
+    }
+  }
+
+  if (!res.ok) {
+    const data = await parseResponseBody(res)
+    const message = data?.detail || data?.message || data?.error || `API error ${res.status}: /decision/report`
+    throw new Error(message)
+  }
+
+  const blob = await res.blob()
+  const disposition = res.headers.get('content-disposition') || ''
+  const match = disposition.match(/filename="?([^";]+)"?/i)
+
+  return {
+    blob,
+    filename: match?.[1] || `${String(symbol).toUpperCase()}_decision_report.pdf`,
+  }
+}
+
+export async function downloadTradeIntelligenceReport(symbol, intent = 'EVALUATE') {
+  const token = getAccessToken()
+  if (!token) {
+    throw new Error('Please sign in to download a report.')
+  }
+
+  const res = await fetch(`${BASE}/trade-intelligence/report`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ symbol, intent }),
+  })
+
+  if (res.status === 401) {
+    throw new Error('Your session expired. Please sign in again.')
+  }
+
+  if (!res.ok) {
+    const data = await parseResponseBody(res)
+    const message = data?.detail || data?.message || data?.error || `API error ${res.status}: /trade-intelligence/report`
+    throw new Error(message)
+  }
+
+  const blob = await res.blob()
+  const disposition = res.headers.get('content-disposition') || ''
+  const match = disposition.match(/filename="?([^";]+)"?/i)
+
+  return {
+    blob,
+    filename: match?.[1] || `${String(symbol).toUpperCase()}_${String(intent).toUpperCase()}_trade_report.pdf`,
+  }
+}

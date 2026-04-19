@@ -8,6 +8,7 @@ export default function CandlestickChart({ symbol, trades = [] }) {
   const containerRef = useRef(null)
   const chartRef     = useRef(null)
   const seriesRef    = useRef(null)
+  const requestIdRef = useRef(0)
   const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || 'light')
   const [period,  setPeriod]  = useState('6mo')
   const [loading, setLoading] = useState(true)
@@ -88,18 +89,23 @@ export default function CandlestickChart({ symbol, trades = [] }) {
 
     return () => {
       window.removeEventListener('resize', handleResize)
+      seriesRef.current = null
+      chartRef.current = null
       chart.remove()
     }
   }, [theme])
 
   useEffect(() => {
     if (!seriesRef.current || !symbol) return
+    const requestId = ++requestIdRef.current
+    const controller = new AbortController()
     setLoading(true)
     setError(null)
 
-    fetch(`/api/ohlcv/${symbol}?period=${period}`)
+    fetch(`/api/ohlcv/${symbol}?period=${period}`, { signal: controller.signal })
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
       .then(data => {
+        if (controller.signal.aborted || requestId !== requestIdRef.current || !seriesRef.current || !chartRef.current) return
         const candles = data.candles || []
         if (!candles.length) { setError('No data'); setLoading(false); return }
 
@@ -127,10 +133,16 @@ export default function CandlestickChart({ symbol, trades = [] }) {
           seriesRef.current.setMarkers(markers)
         }
 
-        chartRef.current.timeScale().fitContent()
+        chartRef.current?.timeScale().fitContent()
         setLoading(false)
       })
-      .catch(e => { setError(e.message); setLoading(false) })
+      .catch(e => {
+        if (controller.signal.aborted) return
+        setError(e.message)
+        setLoading(false)
+      })
+
+    return () => controller.abort()
   }, [symbol, period, trades])
 
   return (
