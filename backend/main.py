@@ -18,6 +18,12 @@ from core.ws.paper_scheduler import (
     start_paper_scheduler, stop_paper_scheduler                     
 ) 
 from api.routes.market import router as market_router_v2
+from api.routes.auth import router as auth_router          
+from db.auth_models import init_auth_tables                 
+from services.auth_service import get_current_user  
+from fastapi import Depends
+from db.auth_models import User
+from fastapi.middleware.cors import CORSMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +31,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    init_auth_tables()        
     start_scheduler()
     start_paper_scheduler()
     yield
@@ -45,6 +52,7 @@ app.include_router(news.router,       prefix="/news")
 app.include_router(backtest_router,   prefix="/backtest")
 app.include_router(ws_router,         prefix="/ws")
 app.include_router(paper_router,      prefix="/paper")
+app.include_router(auth_router, prefix="/auth")
 
 
 @app.get("/")
@@ -80,7 +88,10 @@ def get_ohlcv(symbol: str, period: str = Query("6mo")):
 
 
 @app.get("/decision/{symbol}")
-def get_decision(symbol: str):
+def get_decision(
+    symbol: str,
+    current_user: User = Depends(get_current_user),  
+):
     sym = symbol.upper()
 
     ml_prediction = "DOWN"
@@ -123,23 +134,27 @@ def get_decision(symbol: str):
 
     try:
         save_prediction(
-            symbol=sym, ml_prediction=ml_prediction,
+            symbol=sym,
+            ml_prediction=ml_prediction,
             ml_confidence=round(ml_confidence, 4),
             sentiment=sentiment_label,
             sent_confidence=round(sentiment_confidence, 4),
-            action=decision["action"], reason=decision["reason"],
+            action=decision["action"],
+            reason=decision["reason"],
         )
     except Exception as e:
         logger.warning(f"Decision persistence failed for {sym}: {e}")
 
     return {
-        "symbol": sym, "price": price,
+        "symbol": sym,
+        "price": price,
         "ml_prediction": ml_prediction,
         "ml_confidence": round(ml_confidence, 4),
         "sentiment": sentiment_label,
         "sentiment_confidence": round(sentiment_confidence, 4),
         "fear_greed": fear_greed,
         "decision": decision,
+        "user": current_user.email  
     }
 
 
@@ -155,3 +170,11 @@ def get_summary(symbol: str):
 @app.get("/markets")
 def get_all_markets():
     return {"exchanges": market_utils.all_exchange_status()}
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins     = ["http://localhost:5173", "http://localhost:3000"],  
+    allow_credentials = True,
+    allow_methods     = ["*"],
+    allow_headers     = ["*"],
+)

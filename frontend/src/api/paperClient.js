@@ -1,5 +1,21 @@
 const BASE = '/api/paper'
 
+async function parseResponseBody(res) {
+  const contentType = res.headers.get('content-type') || ''
+  if (contentType.includes('application/json')) {
+    return res.json().catch(() => null)
+  }
+
+  const text = await res.text().catch(() => '')
+  if (!text) return null
+
+  try {
+    return JSON.parse(text)
+  } catch {
+    return { detail: text }
+  }
+}
+
 async function req(method, path, body) {
   const opts = {
     method,
@@ -7,11 +23,12 @@ async function req(method, path, body) {
   }
   if (body) opts.body = JSON.stringify(body)
   const res = await fetch(`${BASE}${path}`, opts)
+  const data = await parseResponseBody(res)
+
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }))
-    throw new Error(err.detail || `API error ${res.status}`)
+    throw new Error(data?.detail || data?.message || data?.error || `API error ${res.status}`)
   }
-  return res.json()
+  return data
 }
 
 export const getSessions          = ()                  => req('GET',  '/sessions')

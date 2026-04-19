@@ -10,6 +10,22 @@ const SECTORS = [
   { label: 'Index ETFs',   syms: ['SPY', 'QQQ', 'DIA', 'IWM']                     },
 ]
 
+async function parseResponseBody(res) {
+  const contentType = res.headers.get('content-type') || ''
+  if (contentType.includes('application/json')) {
+    return res.json().catch(() => null)
+  }
+
+  const text = await res.text().catch(() => '')
+  if (!text) return null
+
+  try {
+    return JSON.parse(text)
+  } catch {
+    return { detail: text }
+  }
+}
+
 function tileColor(chg) {
   if (chg == null) return { bg: C.inputBg, border: C.border, text: C.text3 }
   const intensity = Math.min(Math.abs(chg) / 4, 1)
@@ -36,7 +52,7 @@ export default function MarketHeatmap({ onSelect }) {
       setLoading(true)
       let done = 0
       allSyms.forEach(sym =>
-        fetch(`/api/market/price?symbol=${sym}`).then(r => r.json())
+        fetch(`/api/market/price?symbol=${sym}`).then(parseResponseBody)
           .then(d => { if (d.price) setPrices(p => ({ ...p, [sym]: d })) })
           .catch(() => {})
           .finally(() => { done++; if (done === allSyms.length) setLoading(false) })

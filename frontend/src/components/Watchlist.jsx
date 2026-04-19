@@ -38,24 +38,40 @@ const DEFAULT_WATCHLIST = [
   { symbol: 'NVDA',         exchange: 'NASDAQ','name': 'NVIDIA' },
 ]
 
+async function parseResponseBody(res) {
+  const contentType = res.headers.get('content-type') || ''
+  if (contentType.includes('application/json')) {
+    return res.json().catch(() => null)
+  }
+
+  const text = await res.text().catch(() => '')
+  if (!text) return null
+
+  try {
+    return JSON.parse(text)
+  } catch {
+    return { detail: text }
+  }
+}
+
 async function fetchPrice(symbol, convert = null) {
   const url = `${BASE}/market/price?symbol=${symbol}${convert ? `&convert=${convert}` : ''}`
   const res = await fetch(url).catch(() => null)
   if (!res?.ok) return null
-  return res.json()
+  return parseResponseBody(res)
 }
 
 async function fetchExchanges() {
   const res = await fetch(`${BASE}/market/exchanges`).catch(() => null)
   if (!res?.ok) return []
-  const d = await res.json()
+  const d = await parseResponseBody(res)
   return d.exchanges || []
 }
 
 async function fetchPopularSymbols(exchange) {
   const res = await fetch(`${BASE}/market/exchanges/${exchange}/symbols`).catch(() => null)
   if (!res?.ok) return []
-  const d = await res.json()
+  const d = await parseResponseBody(res)
   return d.symbols || []
 }
 

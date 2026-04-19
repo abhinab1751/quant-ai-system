@@ -14,7 +14,7 @@ WITH ranked AS (
         ROW_NUMBER() OVER (
             PARTITION BY
                 symbol,
-                (EXTRACT(EPOCH FROM fetched_at)::bigint / 300)   -- 300s = 5 min window
+                (EXTRACT(EPOCH FROM fetched_at)::bigint / 300)   
             ORDER BY fetched_at DESC
         ) AS rn
     FROM price
