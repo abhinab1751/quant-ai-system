@@ -77,12 +77,12 @@ export default function AIChat({ symbol, decisionData }) {
         right={
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <div style={{
-              background: C.blueLight, border: `1px solid #BFDBFE`,
+              background: C.blueLight, border: `1px solid ${C.blueBorder}`,
               borderRadius: RADIUS.full, padding: '2px 8px',
               fontSize: 10, fontWeight: 700, color: C.blue,
             }}>LLaMA 3.3 · Groq</div>
             <div style={{
-              background: C.greenBg, border: `1px solid #BBF7D0`,
+              background: C.greenBg, border: `1px solid ${C.greenBorder}`,
               borderRadius: RADIUS.full, padding: '2px 8px',
               fontSize: 10, fontWeight: 700, color: C.green,
             }}>{symbol}</div>
@@ -181,7 +181,7 @@ export default function AIChat({ symbol, decisionData }) {
       </div>
 
       {!import.meta.env.VITE_GROQ_API_KEY && (
-        <div style={{ padding: '6px 14px', background: C.amberBg, borderTop: `1px solid #FDE68A` }}>
+        <div style={{ padding: '6px 14px', background: C.amberBg, borderTop: `1px solid ${C.amberBorder}` }}>
           <span style={{ fontSize: 11, color: C.amber, fontWeight: 600 }}>
             ⚑ Add VITE_GROQ_API_KEY to frontend/.env — free at console.groq.com
           </span>

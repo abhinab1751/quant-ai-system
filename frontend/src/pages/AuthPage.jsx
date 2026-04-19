@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { C, FONTS, RADIUS } from '../components/theme'
 import { ThemeToggle } from '../components/ThemeToggle'
 import candleStickLogo from '../assets/candleStick.png'
@@ -109,8 +109,16 @@ function PasswordField({ label, value, onChange, error, hint, autoComplete = 'cu
   )
 }
 
-export default function AuthPage({ onSuccess, isDark, onToggle }) {
-  const [mode, setMode] = useState('login') 
+export default function AuthPage({ onSuccess, onBack, isDark, onToggle, initialMode = 'login' }) {
+  const [mode, setMode] = useState(initialMode === 'signup' ? 'signup' : 'login')
+
+  useEffect(() => {
+    setMode(initialMode === 'signup' ? 'signup' : 'login')
+  }, [initialMode])
+
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [])
 
   return (
     <div style={{
@@ -120,6 +128,8 @@ export default function AuthPage({ onSuccess, isDark, onToggle }) {
       flexDirection:  'column',
       fontFamily:     FONTS.sans,
     }}>
+      <style>{`
+      `}</style>
       {/* Top bar */}
       <header style={{
         display:     'flex',
@@ -130,7 +140,30 @@ export default function AuthPage({ onSuccess, isDark, onToggle }) {
         borderBottom: `1px solid ${C.border}`,
         boxShadow:   C.shadow,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                background: C.inputBg,
+                border: `1px solid ${C.border}`,
+                borderRadius: RADIUS.md,
+                color: C.text1,
+                padding: '7px 10px',
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontFamily: FONTS.sans,
+              }}
+            >
+              <span aria-hidden="true">←</span>
+              Back
+            </button>
+          )}
           {/* Logo */}
           <img
             src={candleStickLogo}

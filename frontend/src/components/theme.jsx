@@ -4,6 +4,10 @@ export const THEME_CSS = `
   /* ── Light mode (default) ─────────────────────────────────────── */
   :root,
   [data-theme="light"] {
+    --qai-font-sans:     'Plus Jakarta Sans', 'DM Sans', sans-serif;
+    --qai-font-display:  'Plus Jakarta Sans', sans-serif;
+    --qai-font-mono:     'JetBrains Mono', 'Fira Code', monospace;
+
     --qai-page-bg:       #EEF2F8;
     --qai-sidebar-bg:    #FFFFFF;
     --qai-card-bg:       #FFFFFF;
@@ -15,13 +19,17 @@ export const THEME_CSS = `
     --qai-blue-dark:     #1D4ED8;
     --qai-blue-light:    #EFF6FF;
     --qai-blue-mid:      #DBEAFE;
+    --qai-blue-border:   #BFDBFE;
 
     --qai-green:         #16A34A;
     --qai-green-bg:      #F0FDF4;
+    --qai-green-border:  #BBF7D0;
     --qai-red:           #DC2626;
     --qai-red-bg:        #FEF2F2;
+    --qai-red-border:    #FECACA;
     --qai-amber:         #D97706;
     --qai-amber-bg:      #FFFBEB;
+    --qai-amber-border:  #FDE68A;
     --qai-purple:        #7C3AED;
 
     --qai-text0:         #0F172A;
@@ -45,42 +53,50 @@ export const THEME_CSS = `
 
   /* ── Dark mode ─────────────────────────────────────────────────── */
   [data-theme="dark"] {
-    --qai-page-bg:       #0B0F19;
-    --qai-sidebar-bg:    #111827;
-    --qai-card-bg:       #1A2235;
-    --qai-header-bg:     #111827;
-    --qai-input-bg:      #1E2A40;
-    --qai-row-hover:     #1F2D43;
+    --qai-font-sans:     'Zen Kaku Gothic New', 'Noto Sans JP', sans-serif;
+    --qai-font-display:  'Zen Kaku Gothic New', 'Noto Sans JP', sans-serif;
+    --qai-font-mono:     'JetBrains Mono', 'Fira Code', monospace;
 
-    --qai-blue:          #3B82F6;
-    --qai-blue-dark:     #2563EB;
-    --qai-blue-light:    rgba(59,130,246,0.12);
-    --qai-blue-mid:      rgba(59,130,246,0.18);
+    --qai-page-bg:       #050505;
+    --qai-sidebar-bg:    #080808;
+    --qai-card-bg:       #0A0A0A;
+    --qai-header-bg:     #050505;
+    --qai-input-bg:      #111111;
+    --qai-row-hover:     #141414;
+
+    --qai-blue:          #E11D48;
+    --qai-blue-dark:     #BE123C;
+    --qai-blue-light:    #2A1118;
+    --qai-blue-mid:      #3A121E;
+    --qai-blue-border:   #4C1D27;
 
     --qai-green:         #22C55E;
-    --qai-green-bg:      rgba(34,197,94,0.10);
-    --qai-red:           #F87171;
-    --qai-red-bg:        rgba(248,113,113,0.10);
-    --qai-amber:         #FBBF24;
-    --qai-amber-bg:      rgba(251,191,36,0.10);
+    --qai-green-bg:      #052E16;
+    --qai-green-border:  #14532D;
+    --qai-red:           #FB7185;
+    --qai-red-bg:        #3F0C18;
+    --qai-red-border:    #5D1424;
+    --qai-amber:         #F59E0B;
+    --qai-amber-bg:      #3A2B05;
+    --qai-amber-border:  #6B4E09;
     --qai-purple:        #A78BFA;
 
-    --qai-text0:         #F1F5F9;
-    --qai-text1:         #CBD5E1;
-    --qai-text2:         #94A3B8;
-    --qai-text3:         #64748B;
-    --qai-text4:         #334155;
+    --qai-text0:         #F5F5F5;
+    --qai-text1:         #E5E5E5;
+    --qai-text2:         #A3A3A3;
+    --qai-text3:         #737373;
+    --qai-text4:         #404040;
 
-    --qai-border:        #1E2D45;
-    --qai-border-focus:  #3B82F6;
+    --qai-border:        #262626;
+    --qai-border-focus:  #E11D48;
     --qai-border-card:   rgba(255,255,255,0.06);
 
     --qai-shadow-sm:     0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
     --qai-shadow-md:     0 4px 16px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.2);
     --qai-shadow-lg:     0 8px 32px rgba(0,0,0,0.5), 0 4px 8px rgba(0,0,0,0.3);
 
-    --qai-toggle-bg:     #334155;
-    --qai-toggle-thumb:  #F1F5F9;
+    --qai-toggle-bg:     #262626;
+    --qai-toggle-thumb:  #F5F5F5;
   }
 
   /* ── Transitions ────────────────────────────────────────────────── */
@@ -116,13 +132,17 @@ export const C = {
   blueDark:    'var(--qai-blue-dark)',
   blueLight:   'var(--qai-blue-light)',
   blueMid:     'var(--qai-blue-mid)',
+  blueBorder:  'var(--qai-blue-border)',
 
   green:       'var(--qai-green)',
   greenBg:     'var(--qai-green-bg)',
+  greenBorder: 'var(--qai-green-border)',
   red:         'var(--qai-red)',
   redBg:       'var(--qai-red-bg)',
+  redBorder:   'var(--qai-red-border)',
   amber:       'var(--qai-amber)',
   amberBg:     'var(--qai-amber-bg)',
+  amberBorder: 'var(--qai-amber-border)',
   purple:      'var(--qai-purple)',
 
   text0:       'var(--qai-text0)',
@@ -141,9 +161,9 @@ export const C = {
 }
 
 export const FONTS = {
-  sans:    "'Plus Jakarta Sans', 'DM Sans', sans-serif",
-  mono:    "'JetBrains Mono', 'Fira Code', monospace",
-  display: "'Plus Jakarta Sans', sans-serif",
+  sans:    'var(--qai-font-sans)',
+  mono:    'var(--qai-font-mono)',
+  display: 'var(--qai-font-display)',
 }
 
 export const RADIUS = {
@@ -157,11 +177,14 @@ export const RADIUS = {
 
 export function Card({ children, style, onClick }) {
   return (
-    <div onClick={onClick} style={{
+    <div
+      onClick={onClick}
+      style={{
       background:   C.cardBg,
       borderRadius: RADIUS.lg,
       boxShadow:    C.shadowMd,
       border:       `1px solid ${C.border}`,
+      transition:   'box-shadow 220ms ease, border-color 220ms ease',
       ...style,
     }}>
       {children}

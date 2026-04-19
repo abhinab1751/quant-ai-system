@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createChart } from 'lightweight-charts'
+import { C, FONTS, RADIUS } from './theme'
 
 const PERIODS = ['1mo', '3mo', '6mo', '1y', '2y']
 
@@ -7,26 +8,59 @@ export default function CandlestickChart({ symbol, trades = [] }) {
   const containerRef = useRef(null)
   const chartRef     = useRef(null)
   const seriesRef    = useRef(null)
+  const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || 'light')
   const [period,  setPeriod]  = useState('6mo')
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
 
   useEffect(() => {
+    const el = document.documentElement
+    const obs = new MutationObserver(() => {
+      setTheme(el.getAttribute('data-theme') || 'light')
+    })
+    obs.observe(el, { attributes: true, attributeFilter: ['data-theme'] })
+    return () => obs.disconnect()
+  }, [])
+
+  useEffect(() => {
     if (!containerRef.current) return
+
+    const isDark = theme === 'dark'
+    const palette = isDark
+      ? {
+          bg: '#0A0A0A',
+          text: '#A3A3A3',
+          grid: '#262626',
+          green: '#22C55E',
+          red: '#FB7185',
+          btnBg: '#111111',
+          btnBorder: '#262626',
+          btnText: '#A3A3A3',
+        }
+      : {
+          bg: '#FFFFFF',
+          text: '#64748B',
+          grid: '#E2E8F0',
+          green: '#16A34A',
+          red: '#DC2626',
+          btnBg: '#F4F6FB',
+          btnBorder: '#E2E8F0',
+          btnText: '#64748B',
+        }
 
     const chart = createChart(containerRef.current, {
       layout: {
-        background: { color: '#12121e' },
-        textColor:  '#888',
+        background: { color: palette.bg },
+        textColor:  palette.text,
       },
       grid: {
-        vertLines:  { color: '#2a2a3e' },
-        horzLines:  { color: '#2a2a3e' },
+        vertLines:  { color: palette.grid },
+        horzLines:  { color: palette.grid },
       },
       crosshair: { mode: 1 },
-      rightPriceScale: { borderColor: '#2a2a3e' },
+      rightPriceScale: { borderColor: palette.grid },
       timeScale: {
-        borderColor:     '#2a2a3e',
+        borderColor:     palette.grid,
         timeVisible:     true,
         secondsVisible:  false,
       },
@@ -35,11 +69,11 @@ export default function CandlestickChart({ symbol, trades = [] }) {
     })
 
     const candleSeries = chart.addCandlestickSeries({
-      upColor:      '#22c55e',
-      downColor:    '#ef4444',
+      upColor:      palette.green,
+      downColor:    palette.red,
       borderVisible: false,
-      wickUpColor:   '#22c55e',
-      wickDownColor: '#ef4444',
+      wickUpColor:   palette.green,
+      wickDownColor: palette.red,
     })
 
     chartRef.current  = chart
@@ -56,7 +90,7 @@ export default function CandlestickChart({ symbol, trades = [] }) {
       window.removeEventListener('resize', handleResize)
       chart.remove()
     }
-  }, [])
+  }, [theme])
 
   useEffect(() => {
     if (!seriesRef.current || !symbol) return
@@ -85,7 +119,7 @@ export default function CandlestickChart({ symbol, trades = [] }) {
             .map(t => ({
               time:      t.date,
               position:  t.action === 'BUY' ? 'belowBar' : 'aboveBar',
-              color:     t.action === 'BUY' ? '#22c55e' : '#ef4444',
+              color:     t.action === 'BUY' ? (theme === 'dark' ? '#22C55E' : '#16A34A') : (theme === 'dark' ? '#FB7185' : '#DC2626'),
               shape:     t.action === 'BUY' ? 'arrowUp'  : 'arrowDown',
               text:      t.action,
               size:      1,
@@ -100,15 +134,24 @@ export default function CandlestickChart({ symbol, trades = [] }) {
   }, [symbol, period, trades])
 
   return (
-    <div style={styles.card}>
-      <div style={styles.header}>
-        <span style={styles.title}>{symbol} — Price chart</span>
-        <div style={styles.periodBtns}>
+    <div style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: RADIUS.lg, padding: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <span style={{ fontSize: 15, fontWeight: 600, color: C.text0, fontFamily: FONTS.sans }}>{symbol} — Price chart</span>
+        <div style={{ display: 'flex', gap: 4 }}>
           {PERIODS.map(p => (
             <button
               key={p}
               onClick={() => setPeriod(p)}
-              style={{ ...styles.pBtn, ...(p === period ? styles.pBtnActive : {}) }}
+              style={{
+                background: p === period ? C.blue : C.inputBg,
+                border: `1px solid ${p === period ? C.blue : C.border}`,
+                borderRadius: RADIUS.sm,
+                color: p === period ? '#fff' : C.text2,
+                padding: '3px 8px',
+                fontSize: 11,
+                cursor: 'pointer',
+                fontFamily: FONTS.sans,
+              }}
             >
               {p}
             </button>
@@ -117,24 +160,13 @@ export default function CandlestickChart({ symbol, trades = [] }) {
       </div>
 
       {loading && (
-        <div style={styles.overlay}>Loading chart…</div>
+        <div style={{ textAlign: 'center', padding: '40px 0', color: C.text3, fontSize: 13 }}>Loading chart…</div>
       )}
       {error && (
-        <div style={{ ...styles.overlay, color: '#ef4444' }}>{error}</div>
+        <div style={{ textAlign: 'center', padding: '40px 0', color: C.red, fontSize: 13 }}>{error}</div>
       )}
 
       <div ref={containerRef} style={{ opacity: loading ? 0.3 : 1 }} />
     </div>
   )
-}
-
-const styles = {
-  card:       { background: '#1e1e2e', border: '1px solid #33334a', borderRadius: 12, padding: 20 },
-  header:     { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  title:      { fontSize: 15, fontWeight: 600, color: '#e0e0f0' },
-  periodBtns: { display: 'flex', gap: 4 },
-  pBtn:       { background: '#2a2a3e', border: '1px solid #44445a', borderRadius: 4,
-                color: '#888', padding: '3px 8px', fontSize: 11, cursor: 'pointer' },
-  pBtnActive: { background: '#7c6af7', borderColor: '#7c6af7', color: '#fff' },
-  overlay:    { textAlign: 'center', padding: '40px 0', color: '#666', fontSize: 13 },
 }

@@ -3,9 +3,9 @@ import { getDecision } from '../api/client'
 import { C, FONTS, RADIUS, Card, CardHeader, Badge, Spinner } from './theme'
 
 const ACTION = {
-  BUY:  { color: C.green,  bg: C.greenBg, border: '#BBF7D0', label: 'Buy Signal'  },
-  SELL: { color: C.red,    bg: C.redBg,   border: '#FECACA', label: 'Sell Signal' },
-  HOLD: { color: C.amber,  bg: C.amberBg, border: '#FDE68A', label: 'Hold'        },
+  BUY:  { color: C.green,  bg: C.greenBg, border: C.greenBorder, label: 'Buy Signal'  },
+  SELL: { color: C.red,    bg: C.redBg,   border: C.redBorder, label: 'Sell Signal' },
+  HOLD: { color: C.amber,  bg: C.amberBg, border: C.amberBorder, label: 'Hold'        },
 }
 
 const STRENGTH_COLOR = { strong: C.green, moderate: C.amber, weak: C.text2 }
@@ -31,7 +31,7 @@ export default function DecisionCard({ symbol, liveDecision }) {
   if (loading) return <Card><Spinner label={`Analysing ${symbol}…`} /></Card>
   if (error)   return (
     <Card style={{ padding: 20 }}>
-      <div style={{ fontSize: 13, color: C.red, background: C.redBg, padding: '10px 14px', borderRadius: RADIUS.md, border: `1px solid #FECACA` }}>
+      <div style={{ fontSize: 13, color: C.red, background: C.redBg, padding: '10px 14px', borderRadius: RADIUS.md, border: `1px solid ${C.redBorder}` }}>
         ⚠ {error}
       </div>
     </Card>
@@ -177,9 +177,9 @@ function ConfBar({ label, pct, color }) {
 
 function SignalChip({ label, value, type }) {
   const colors = {
-    positive: { bg: C.greenBg, color: C.green, border: '#BBF7D0' },
-    negative: { bg: C.redBg,   color: C.red,   border: '#FECACA' },
-    neutral:  { bg: C.blueLight, color: C.blue, border: '#BFDBFE' },
+    positive: { bg: C.greenBg, color: C.green, border: C.greenBorder },
+    negative: { bg: C.redBg,   color: C.red,   border: C.redBorder },
+    neutral:  { bg: C.blueLight, color: C.blue, border: C.blueBorder },
     muted:    { bg: C.inputBg,  color: C.text2, border: C.border  },
   }
   const s = colors[type] || colors.muted

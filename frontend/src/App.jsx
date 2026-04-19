@@ -14,6 +14,7 @@ import PortfolioTracker from './components/PortfolioTracker'
 import MarketHeatmap    from './components/MarketHeatmap'
 import CandlestickChart from './components/CandlestickChart'
 import PaperTrading     from './components/PaperTrading'
+import LandingPage from './pages/LandingPage'
 import { useStockStream }                            from './hooks/useStockStream'
 import { useToasts, ToastContainer, toast }          from './components/Toast'
 import candleStickLogo                               from './assets/candleStick.png'
@@ -22,14 +23,14 @@ if (!document.getElementById('qai-fonts')) {
   const l = document.createElement('link')
   l.id   = 'qai-fonts'
   l.rel  = 'stylesheet'
-  l.href = 'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap'
+  l.href = 'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;500;700;900&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap'
   document.head.appendChild(l)
 }
 
 const GLOBAL_CSS = `
   ${THEME_CSS}
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  html { font-family: ${FONTS.sans}; -webkit-font-smoothing: antialiased; }
+  html { font-family: ${FONTS.sans}; -webkit-font-smoothing: antialiased; scroll-behavior: smooth; }
   body { background: var(--qai-page-bg); color: var(--qai-text0); }
   input, button, select, textarea { font-family: ${FONTS.sans}; outline: none; }
   input:focus {
@@ -52,8 +53,16 @@ function getStoredUser() {
 export default function App() {
   const { isDark, toggle, theme, setTheme } = useTheme()
   const [user, setUser] = useState(getStoredUser)
+  const [authMode, setAuthMode] = useState(null)
 
-  const handleAuthSuccess = (u) => setUser(u)
+  const handleAuthSuccess = (u) => {
+    setUser(u)
+    setAuthMode(null)
+  }
+
+  const openLogin = () => setAuthMode('login')
+  const openSignup = () => setAuthMode('signup')
+  const goToLanding = () => setAuthMode(null)
 
   const handleLogout = () => {
     localStorage.removeItem('qai_access')
@@ -65,8 +74,10 @@ export default function App() {
   return (
     <>
       <style>{GLOBAL_CSS}</style>
-      {!user
-        ? <AuthPage onSuccess={handleAuthSuccess} isDark={isDark} onToggle={toggle} />
+      {!user && !authMode
+        ? <LandingPage onLogin={openLogin} onSignup={openSignup} isDark={isDark} onToggleTheme={toggle} />
+        : !user
+          ? <AuthPage onSuccess={handleAuthSuccess} onBack={goToLanding} isDark={isDark} onToggle={toggle} initialMode={authMode} />
         : <Dashboard user={user} onLogout={handleLogout} isDark={isDark} toggle={toggle} theme={theme} setTheme={setTheme} />
       }
     </>

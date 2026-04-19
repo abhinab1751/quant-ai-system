@@ -172,7 +172,7 @@ function OrderTicket({ symbol, pt, onClose }) {
       {/* Error */}
       {(localErr || pt.error) && (
         <div style={{
-          background: C.redBg, border: `1px solid #FECACA`,
+          background: C.redBg, border: `1px solid ${C.redBorder}`,
           borderRadius: RADIUS.md, padding: '10px 12px', marginBottom: 14,
           fontSize: 12, color: C.red, lineHeight: 1.4,
         }}>
@@ -371,7 +371,7 @@ export default function PaperTrading({ activeSymbol = 'AAPL', liveDecision = nul
           }}>New Session</button>
 
           <button onClick={pt.reset} style={{
-            background: C.redBg, border: `1px solid #FECACA`, borderRadius: RADIUS.md,
+            background: C.redBg, border: `1px solid ${C.redBorder}`, borderRadius: RADIUS.md,
             color: C.red, padding: '8px 14px', fontSize: 12, cursor: 'pointer', fontFamily: FONTS.sans,
           }}>Reset</button>
         </div>
@@ -510,7 +510,7 @@ function PositionsTable({ positions, symbol, pt }) {
                     onClick={() => pt.submitOrder(p.symbol, 'SELL', p.quantity)}
                     disabled={pt.orderLoading}
                     style={{
-                      background: C.redBg, border: `1px solid #FECACA`, borderRadius: RADIUS.sm,
+                      background: C.redBg, border: `1px solid ${C.redBorder}`, borderRadius: RADIUS.sm,
                       color: C.red, padding: '5px 12px', fontSize: 11, fontWeight: 700,
                       cursor: pt.orderLoading ? 'not-allowed' : 'pointer', fontFamily: FONTS.sans,
                     }}

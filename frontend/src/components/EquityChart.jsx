@@ -2,15 +2,13 @@ import { useState, useId } from 'react'
 import { C, FONTS, RADIUS, Card, CardHeader, Spinner } from './theme'
 
 const SVG = {
-  green:      '#16A34A',
-  red:        '#DC2626',
-  amber:      '#D97706',
-  border:     '#E2E8F0',    
-  text:       '#94A3B8',
-  gridLine:   '#E2E8F0',
-  baseline:   '#94A3B8',
-  darkBorder: '#1E2D45',
-  darkText:   '#64748B',
+  green:      C.green,
+  red:        C.red,
+  amber:      C.amber,
+  border:     C.border,
+  text:       C.text3,
+  gridLine:   C.border,
+  baseline:   C.text3,
 }
 
 async function runBT(symbol, capital, timeoutMs = 90_000) {
@@ -387,7 +385,7 @@ function EquityCurve({ curve, capital, trades }) {
           cy={yOf(last)}
           r={5}
           fill={lc}
-          stroke="#fff"
+          stroke={C.cardBg}
           strokeWidth="2"
           style={{ filter: `drop-shadow(0 0 4px ${lc})` }}
         />

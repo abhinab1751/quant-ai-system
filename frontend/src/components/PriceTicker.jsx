@@ -23,10 +23,10 @@ export default function PriceTicker({ symbol, priceData, connected, compact = fa
     return (
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
-        background: flash === 'up'   ? '#F0FDF4'
-                  : flash === 'down' ? '#FEF2F2'
+        background: flash === 'up'   ? C.greenBg
+                  : flash === 'down' ? C.redBg
                   : C.inputBg,
-        border: `1.5px solid ${flash === 'up' ? '#BBF7D0' : flash === 'down' ? '#FECACA' : C.border}`,
+        border: `1.5px solid ${flash === 'up' ? C.greenBorder : flash === 'down' ? C.redBorder : C.border}`,
         borderRadius: RADIUS.md,
         padding: '6px 14px',
         transition: 'all 0.3s ease',
@@ -34,7 +34,7 @@ export default function PriceTicker({ symbol, priceData, connected, compact = fa
         {/* Symbol badge */}
         <div style={{
           width: 28, height: 28, borderRadius: '50%',
-          background: `linear-gradient(135deg, ${C.blue}, #60A5FA)`,
+          background: `linear-gradient(135deg, ${C.blue}, ${C.blueDark})`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           flexShrink: 0,
         }}>
@@ -67,7 +67,7 @@ export default function PriceTicker({ symbol, priceData, connected, compact = fa
         <div style={{
           width: 7, height: 7, borderRadius: '50%',
           background: connected ? C.green : C.red,
-          boxShadow: `0 0 0 2px ${connected ? '#BBF7D0' : '#FECACA'}`,
+          boxShadow: `0 0 0 2px ${connected ? C.greenBorder : C.redBorder}`,
           animation: connected ? 'cb-pulse 2s infinite' : 'none',
         }} />
       </div>
@@ -76,10 +76,10 @@ export default function PriceTicker({ symbol, priceData, connected, compact = fa
 
   return (
     <div style={{
-      background: flash === 'up'   ? '#F0FDF4'
-                : flash === 'down' ? '#FEF2F2'
+      background: flash === 'up'   ? C.greenBg
+                : flash === 'down' ? C.redBg
                 : C.cardBg,
-      border: `1.5px solid ${flash === 'up' ? '#BBF7D0' : flash === 'down' ? '#FECACA' : C.border}`,
+      border: `1.5px solid ${flash === 'up' ? C.greenBorder : flash === 'down' ? C.redBorder : C.border}`,
       borderRadius: RADIUS.lg,
       padding: '16px 20px',
       display: 'flex', alignItems: 'center', gap: 16,
@@ -89,7 +89,7 @@ export default function PriceTicker({ symbol, priceData, connected, compact = fa
       {/* Symbol */}
       <div style={{
         width: 44, height: 44, borderRadius: '50%',
-        background: `linear-gradient(135deg, ${C.blue}, #60A5FA)`,
+        background: `linear-gradient(135deg, ${C.blue}, ${C.blueDark})`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         boxShadow: `0 4px 12px ${C.blue}30`,
         flexShrink: 0,
@@ -134,7 +134,7 @@ export default function PriceTicker({ symbol, priceData, connected, compact = fa
         <div style={{
           width: 8, height: 8, borderRadius: '50%',
           background: connected ? C.green : C.red,
-          boxShadow: `0 0 0 3px ${connected ? '#BBF7D0' : '#FECACA'}`,
+          boxShadow: `0 0 0 3px ${connected ? C.greenBorder : C.redBorder}`,
           animation: connected ? 'cb-pulse 2s infinite' : 'none',
         }} />
         <span style={{ fontSize: 9, fontWeight: 600, color: connected ? C.green : C.red, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
