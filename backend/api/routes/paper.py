@@ -1,12 +1,14 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy import select, update
 
 from services.paper_trading_service import paper_service, RiskError
 from db.database import SessionLocal, PaperSession, PaperOrder
+from services.auth_service import get_current_user
+from db.auth_models import User
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["paper-trading"])
@@ -32,55 +34,70 @@ class AIOrderRequest(BaseModel):
     reason:      str       = ""
 
 @router.post("/sessions", summary="Create a paper trading session")
-def create_session(req: CreateSessionRequest):
-    session = paper_service.create_session(req.name, req.initial_capital)
+def create_session(req: CreateSessionRequest, current_user: User = Depends(get_current_user)):
+    session = paper_service.create_session(current_user.id, req.name, req.initial_capital)
     return _session_dict(session)
 
 
 @router.get("/sessions", summary="List all sessions")
-def list_sessions():
+def list_sessions(current_user: User = Depends(get_current_user)):
     with SessionLocal() as db:
         sessions = (
-            db.execute(select(PaperSession).order_by(PaperSession.created_at.desc()))
+            db.execute(
+                select(PaperSession)
+                .where(PaperSession.user_id == current_user.id)
+                .order_by(PaperSession.created_at.desc())
+            )
             .scalars()
             .all()
         )
+
+    if not sessions:
+        # Preserve original UX: each user gets a starter $100k paper account.
+        default_session = paper_service.get_or_create_default_session(current_user.id)
+        sessions = [default_session]
+
     return [_session_dict(s) for s in sessions]
 
 
 @router.get("/sessions/{session_id}", summary="Get session details")
-def get_session(session_id: int):
+def get_session(session_id: int, current_user: User = Depends(get_current_user)):
     with SessionLocal() as db:
         session = db.get(PaperSession, session_id)
-    if not session:
+    if not session or session.user_id != current_user.id:
         raise HTTPException(404, f"Session {session_id} not found")
     return _session_dict(session)
 
 
 @router.delete("/sessions/{session_id}/reset", summary="Reset session")
-def reset_session(session_id: int):
+def reset_session(session_id: int, current_user: User = Depends(get_current_user)):
     try:
-        session = paper_service.reset_session(session_id)
+        session = paper_service.reset_session(session_id, current_user.id)
         return {"message": f"Session '{session.name}' reset to ${session.initial_capital:,.2f}", **_session_dict(session)}
     except Exception as e:
         raise HTTPException(400, str(e))
 
 
 @router.post("/sessions/{session_id}/activate", summary="Set active session")
-def activate_session(session_id: int):
+def activate_session(session_id: int, current_user: User = Depends(get_current_user)):
     with SessionLocal() as db:
         session = db.get(PaperSession, session_id)
-        if not session:
+        if not session or session.user_id != current_user.id:
             raise HTTPException(404, f"Session {session_id} not found")
-        db.execute(update(PaperSession).values(is_active=False))
+        db.execute(
+            update(PaperSession)
+            .where(PaperSession.user_id == current_user.id)
+            .values(is_active=False)
+        )
         session.is_active = True
         db.commit()
         return {"message": f"Session '{session.name}' is now active"}
 
 @router.post("/orders", summary="Place a paper order")
-def place_order(req: PlaceOrderRequest):
+def place_order(req: PlaceOrderRequest, current_user: User = Depends(get_current_user)):
     try:
         result = paper_service.place_order(
+            user_id     = current_user.id,
             session_id  = req.session_id,
             symbol      = req.symbol.upper(),
             side        = req.side,
@@ -100,9 +117,10 @@ def place_order(req: PlaceOrderRequest):
 
 
 @router.post("/orders/ai", summary="Execute an AI signal as a paper order")
-def ai_order(req: AIOrderRequest):
+def ai_order(req: AIOrderRequest, current_user: User = Depends(get_current_user)):
     try:
         result = paper_service.execute_ai_signal(
+            user_id    = current_user.id,
             session_id = req.session_id,
             symbol     = req.symbol.upper(),
             action     = req.action,
@@ -120,10 +138,10 @@ def ai_order(req: AIOrderRequest):
 
 
 @router.get("/sessions/{session_id}/orders", summary="Order history")
-def get_orders(session_id: int, limit: int = Query(50, le=500)):
+def get_orders(session_id: int, limit: int = Query(50, le=500), current_user: User = Depends(get_current_user)):
     with SessionLocal() as db:
         session = db.get(PaperSession, session_id)
-        if not session:
+        if not session or session.user_id != current_user.id:
             raise HTTPException(404, "Session not found")
         orders = (
             db.execute(
@@ -139,10 +157,13 @@ def get_orders(session_id: int, limit: int = Query(50, le=500)):
 
 
 @router.delete("/orders/{order_id}", summary="Cancel a pending order")
-def cancel_order(order_id: int):
+def cancel_order(order_id: int, current_user: User = Depends(get_current_user)):
     with SessionLocal() as db:
         order = db.get(PaperOrder, order_id)
         if not order:
+            raise HTTPException(404, f"Order {order_id} not found")
+        session = db.get(PaperSession, order.session_id)
+        if not session or session.user_id != current_user.id:
             raise HTTPException(404, f"Order {order_id} not found")
         if order.status != "PENDING":
             raise HTTPException(400, f"Order {order_id} is already {order.status}")
@@ -151,47 +172,47 @@ def cancel_order(order_id: int):
         return {"message": f"Order {order_id} cancelled"}
 
 @router.get("/sessions/{session_id}/portfolio", summary="Full portfolio state")
-def get_portfolio(session_id: int):
+def get_portfolio(session_id: int, current_user: User = Depends(get_current_user)):
     try:
-        return paper_service.get_portfolio_state(session_id)
+        return paper_service.get_portfolio_state(session_id, current_user.id)
     except ValueError:
         raise HTTPException(404, "Session not found")
 
 
 @router.get("/sessions/{session_id}/positions", summary="Open positions")
-def get_positions(session_id: int):
-    state = paper_service.get_portfolio_state(session_id)
+def get_positions(session_id: int, current_user: User = Depends(get_current_user)):
+    state = paper_service.get_portfolio_state(session_id, current_user.id)
     return {"positions": state["positions"]}
 
 
 @router.get("/sessions/{session_id}/trades", summary="Trade history")
-def get_trades(session_id: int, limit: int = Query(100, le=1000)):
+def get_trades(session_id: int, limit: int = Query(100, le=1000), current_user: User = Depends(get_current_user)):
     try:
-        return {"trades": paper_service.get_trade_history(session_id, limit)}
+        return {"trades": paper_service.get_trade_history(session_id, current_user.id, limit)}
     except ValueError:
         raise HTTPException(404, "Session not found")
 
 
 @router.get("/sessions/{session_id}/equity", summary="Equity curve data")
-def get_equity(session_id: int, limit: int = Query(500, le=5000)):
+def get_equity(session_id: int, limit: int = Query(500, le=5000), current_user: User = Depends(get_current_user)):
     try:
-        return {"equity": paper_service.get_equity_curve(session_id, limit)}
+        return {"equity": paper_service.get_equity_curve(session_id, current_user.id, limit)}
     except ValueError:
         raise HTTPException(404, "Session not found")
 
 
 @router.get("/sessions/{session_id}/benchmark", summary="Portfolio vs benchmark")
-def get_benchmark(session_id: int):
+def get_benchmark(session_id: int, current_user: User = Depends(get_current_user)):
     try:
-        return paper_service.get_benchmark_comparison(session_id)
+        return paper_service.get_benchmark_comparison(session_id, current_user.id)
     except ValueError:
         raise HTTPException(404, "Session not found")
 
 
 @router.post("/sessions/{session_id}/snapshot", summary="Force a portfolio snapshot")
-def force_snapshot(session_id: int):
+def force_snapshot(session_id: int, current_user: User = Depends(get_current_user)):
     try:
-        snap = paper_service.record_snapshot(session_id)
+        snap = paper_service.record_snapshot(session_id, current_user.id)
         return {
             "portfolio_value": round(snap.portfolio_value, 2),
             "cash":            round(snap.cash, 2),

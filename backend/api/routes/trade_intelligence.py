@@ -1,5 +1,7 @@
 import logging
 import io
+import math
+from numbers import Real
 from pathlib import Path
 from xml.sax.saxutils import escape
 from fastapi import APIRouter, HTTPException, Depends, Query
@@ -43,9 +45,25 @@ class TradeIntelligenceRequest(BaseModel):
 def _format_metric(value):
     if value is None:
         return "-"
-    if isinstance(value, float):
+    if isinstance(value, Real):
+        if not math.isfinite(float(value)):
+            return "-"
         return f"{value:.2f}"
     return str(value)
+
+
+def _sanitize_non_finite(value):
+    """Replace NaN/Infinity recursively so JSON serialization cannot fail."""
+    if isinstance(value, dict):
+        return {k: _sanitize_non_finite(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_non_finite(v) for v in value]
+    if isinstance(value, tuple):
+        return tuple(_sanitize_non_finite(v) for v in value)
+    if isinstance(value, Real):
+        as_float = float(value)
+        return as_float if math.isfinite(as_float) else None
+    return value
 
 
 def _resolve_pdf_logo_path() -> str | None:
@@ -288,7 +306,7 @@ async def _run_analysis(symbol: str, intent: str, current_user: User):
         result = await run_trade_intelligence(symbol, intent)
         if "error" in result:
             raise HTTPException(status_code=500, detail=result["error"])
-        return result
+        return _sanitize_non_finite(result)
     except HTTPException:
         raise
     except Exception as e:

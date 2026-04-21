@@ -1,5 +1,9 @@
 const BASE = '/api/paper'
 
+function getAccessToken() {
+  try { return localStorage.getItem('qai_access') } catch { return null }
+}
+
 async function parseResponseBody(res) {
   const contentType = res.headers.get('content-type') || ''
   if (contentType.includes('application/json')) {
@@ -17,9 +21,13 @@ async function parseResponseBody(res) {
 }
 
 async function req(method, path, body) {
+  const token = getAccessToken()
   const opts = {
     method,
     headers: { 'Content-Type': 'application/json' },
+  }
+  if (token) {
+    opts.headers.Authorization = `Bearer ${token}`
   }
   if (body) opts.body = JSON.stringify(body)
   const res = await fetch(`${BASE}${path}`, opts)

@@ -1,28 +1,60 @@
+import math
+
 from fastapi import APIRouter, Query, HTTPException
 from agents.data_agent import DataAgent
 from core.markets import MarketUtils, EXCHANGES, GLOBAL_INDICES, market_utils
+from core.cache import cache, TTL_PRICE, TTL_EXCHANGE_STATUS, TTL_BATCH_PRICE
 
-router      = APIRouter()
-data_agent  = DataAgent()
+router     = APIRouter()
+data_agent = DataAgent()
+
+
+def _sanitize_for_json(value):
+    """Convert non-JSON-safe float values (NaN/Infinity) to None recursively."""
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, dict):
+        return {k: _sanitize_for_json(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_for_json(v) for v in value]
+    if isinstance(value, tuple):
+        return [_sanitize_for_json(v) for v in value]
+    return value
+
 
 @router.get("/price")
 def get_price(
-    symbol:  str            = Query(..., description="Ticker, e.g. AAPL, RELIANCE.NS, 7203.T"),
-    convert: str | None     = Query(None, description="Convert to currency, e.g. USD, EUR"),
+    symbol:  str        = Query(..., description="Ticker, e.g. AAPL, RELIANCE.NS, 7203.T"),
+    convert: str | None = Query(None, description="Convert to currency, e.g. USD, EUR"),
 ):
-    result = data_agent.get_price_with_currency(symbol, convert_to=convert)
+    cache_key = f"price:{symbol.upper()}:{convert or 'native'}"
+    cached = cache.get(cache_key)
+    if cached:
+        cached["_cached"] = True
+        return cached
+
+    result = _sanitize_for_json(data_agent.get_price_with_currency(symbol, convert_to=convert))
     if result["price"] is None:
         raise HTTPException(
             status_code=404,
             detail=f"No price data for '{symbol}'. Check the ticker symbol and suffix.",
         )
+    cache.set(cache_key, result, ttl=TTL_PRICE)
     return result
+
 
 @router.get("/exchanges")
 def list_exchanges(region: str | None = Query(None, description="Filter by region")):
-    all_ex = MarketUtils.all_exchange_status()
+    cached = cache.get("exchange:status:all")
+    if cached:
+        all_ex = cached
+    else:
+        all_ex = MarketUtils.all_exchange_status()
+        cache.set("exchange:status:all", all_ex, ttl=TTL_EXCHANGE_STATUS)
+
     if region:
         all_ex = [e for e in all_ex if e["region"].lower() == region.lower()]
+
     return {
         "exchanges": all_ex,
         "regions":   MarketUtils.get_regions(),
@@ -58,6 +90,7 @@ def get_exchange(exchange_id: str):
         "mic":        ex.get("mic"),
     }
 
+
 POPULAR_SYMBOLS: dict[str, list[str]] = {
     "NYSE":    ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "BRK-B", "V", "JNJ"],
     "NASDAQ":  ["AAPL", "MSFT", "NVDA", "AMZN", "META", "TSLA", "AVGO", "ASML", "COST"],
@@ -74,30 +107,43 @@ POPULAR_SYMBOLS: dict[str, list[str]] = {
     "B3":      ["PETR4.SA","VALE3.SA","ITUB4.SA","BBDC4.SA","WEGE3.SA","ABEV3.SA"],
 }
 
+
 @router.get("/exchanges/{exchange_id}/symbols")
 def get_popular_symbols(exchange_id: str):
     ex_id = exchange_id.upper()
     if ex_id not in EXCHANGES:
         raise HTTPException(status_code=404, detail=f"Exchange '{ex_id}' not found")
-    symbols = POPULAR_SYMBOLS.get(ex_id, [])
     return {
         "exchange": ex_id,
         "flag":     EXCHANGES[ex_id]["flag"],
-        "symbols":  symbols,
+        "symbols":  POPULAR_SYMBOLS.get(ex_id, []),
     }
+
 
 @router.get("/indices")
 def get_global_indices():
-    indices = data_agent.get_all_indices()
+    cached = cache.get("global:indices")
+    if cached:
+        safe_cached = _sanitize_for_json(cached)
+        return {"indices": safe_cached, "count": len(safe_cached), "_cached": True}
+
+    indices = _sanitize_for_json(data_agent.get_all_indices())
+    cache.set("global:indices", indices, ttl=60)
     return {"indices": indices, "count": len(indices)}
+
 
 @router.get("/prices/batch")
 def get_batch_prices(
-    symbols: str = Query(..., description="Comma-separated tickers: AAPL,RELIANCE.NS,7203.T"),
+    symbols: str        = Query(..., description="Comma-separated tickers: AAPL,RELIANCE.NS,7203.T"),
     convert: str | None = Query(None, description="Target currency"),
 ):
-    syms = [s.strip() for s in symbols.split(",")][:50]
-    prices = data_agent.get_batch_prices(syms)
+    syms    = [s.strip() for s in symbols.split(",")][:50]
+    sym_key = ":".join(sorted(syms)) + f":{convert or ''}"
+    cached  = cache.get(f"batch:{sym_key}")
+    if cached:
+        return {"prices": cached, "_cached": True}
+
+    prices  = _sanitize_for_json(data_agent.get_batch_prices(syms))
     results = []
     for sym, price in prices.items():
         _, ex_id = MarketUtils.resolve_ticker(sym)
@@ -110,4 +156,6 @@ def get_batch_prices(
             "currency": ex["currency"],
             "is_open":  MarketUtils.is_open(ex_id),
         })
+
+    cache.set(f"batch:{sym_key}", results, ttl=TTL_BATCH_PRICE)
     return {"prices": results}

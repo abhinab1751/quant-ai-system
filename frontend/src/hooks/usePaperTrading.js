@@ -7,7 +7,7 @@ import {
 
 const POLL_INTERVAL = 15_000  
 
-export function usePaperTrading() {
+export function usePaperTrading(userId = null) {
   const [sessions,    setSessions]    = useState([])
   const [sessionId,   setSessionId]   = useState(null)
   const [portfolio,   setPortfolio]   = useState(null)
@@ -21,17 +21,48 @@ export function usePaperTrading() {
   const pollRef = useRef(null)
 
   const bootstrap = useCallback(async () => {
+    setLoading(true)
     try {
       const all = await getSessions()
       setSessions(all)
       const active = all.find(s => s.is_active) || all[0]
-      if (active) setSessionId(active.id)
+      if (active) {
+        setSessionId(active.id)
+      } else {
+        setSessionId(null)
+        setPortfolio(null)
+        setTrades([])
+        setEquity([])
+        setOrders([])
+      }
     } catch (e) {
       setError(e.message)
+      setSessionId(null)
+      setPortfolio(null)
+      setTrades([])
+      setEquity([])
+      setOrders([])
+    } finally {
+      setLoading(false)
     }
   }, [])
 
-  useEffect(() => { bootstrap() }, [bootstrap])
+  useEffect(() => {
+    setSessions([])
+    setSessionId(null)
+    setPortfolio(null)
+    setTrades([])
+    setEquity([])
+    setOrders([])
+    setError(null)
+
+    if (!userId) {
+      setLoading(false)
+      return
+    }
+
+    bootstrap()
+  }, [bootstrap, userId])
 
   const loadSession = useCallback(async (id) => {
     if (!id) return

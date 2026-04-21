@@ -7,28 +7,24 @@ from fastapi import APIRouter, HTTPException, Query
 from agents.data_agent import DataAgent
 from services.backtest_engine import BacktestEngine
 from db.database import SessionLocal, BacktestRun
+from core.kafka_producer import kafka
 
 logger     = logging.getLogger(__name__)
 router     = APIRouter()
 data_agent = DataAgent()
 
+
 @router.get("/run/{symbol}", summary="Run a full walk-forward backtest")
 def run_backtest(
     symbol:          str,
-    initial_capital: float = Query(10_000.0, ge=100, le=10_000_000,
-                                   description="Starting capital in USD"),
+    initial_capital: float = Query(10_000.0, ge=100, le=10_000_000),
 ):
     sym = symbol.upper()
-
-    df = data_agent.get_historical_data(sym, period="2y")
+    df  = data_agent.get_historical_data(sym, period="2y")
     if df is None or df.empty:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No price data found for '{sym}'. Check the ticker symbol."
-        )
+        raise HTTPException(status_code=404, detail=f"No price data for '{sym}'.")
 
     engine = BacktestEngine(initial_capital=initial_capital)
-
     try:
         results = engine.run(df)
     except ValueError as e:
@@ -38,8 +34,9 @@ def run_backtest(
         raise HTTPException(status_code=500, detail=f"Backtest engine error: {str(e)}")
 
     equity_curve = results.get("equity_curve") or []
-    trades       = results.get("trades")       or []
+    trades       = results.get("trades") or []
 
+    run_id = None
     try:
         with SessionLocal() as db:
             run = BacktestRun(
@@ -59,8 +56,19 @@ def run_backtest(
             db.refresh(run)
             run_id = run.id
     except Exception as e:
-        logger.warning(f"Could not save backtest run to DB: {e}")
-        run_id = None
+        logger.warning(f"Could not save backtest run: {e}")
+
+    kafka.publish_backtest_result(
+        symbol           = sym,
+        initial_capital  = initial_capital,
+        final_value      = results.get("final_value", initial_capital),
+        total_return_pct = results.get("total_return_pct", 0.0),
+        sharpe_ratio     = results.get("sharpe_ratio", 0.0),
+        max_drawdown_pct = results.get("max_drawdown_pct", 0.0),
+        win_rate_pct     = results.get("win_rate_pct", 0.0),
+        total_trades     = results.get("total_trades", 0),
+        run_id           = run_id,
+    )
 
     return {
         "symbol":           sym,
@@ -76,11 +84,9 @@ def run_backtest(
         "trades":           trades,
     }
 
-@router.get("/history/{symbol}", summary="Previous backtest runs for a symbol")
-def backtest_history(
-    symbol: str,
-    limit:  int = Query(10, ge=1, le=100),
-):
+
+@router.get("/history/{symbol}")
+def backtest_history(symbol: str, limit: int = Query(10, ge=1, le=100)):
     try:
         with SessionLocal() as db:
             rows = (
@@ -108,26 +114,20 @@ def backtest_history(
                 ],
             }
     except Exception as e:
-        logger.error(f"Backtest history fetch failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/run/{symbol}/{run_id}", summary="Get full detail of a specific backtest run")
+
+@router.get("/run/{symbol}/{run_id}")
 def get_run_detail(symbol: str, run_id: int):
     try:
         with SessionLocal() as db:
             run = (
                 db.query(BacktestRun)
-                .filter(
-                    BacktestRun.id     == run_id,
-                    BacktestRun.symbol == symbol.upper()
-                )
+                .filter(BacktestRun.id == run_id, BacktestRun.symbol == symbol.upper())
                 .first()
             )
             if not run:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Backtest run {run_id} not found for {symbol.upper()}"
-                )
+                raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
             return {
                 "run_id":           run.id,
                 "symbol":           run.symbol,
@@ -145,5 +145,4 @@ def get_run_detail(symbol: str, run_id: int):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Run detail fetch failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))

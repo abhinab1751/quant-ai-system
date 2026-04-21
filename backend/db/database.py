@@ -6,7 +6,7 @@ from typing import Optional
 
 from sqlalchemy import (
     create_engine, String, Float, Integer, Boolean, Text,
-    DateTime, ForeignKey, UniqueConstraint, Index, event,
+    DateTime, ForeignKey, UniqueConstraint, Index, event, inspect, text,
 )
 from sqlalchemy.orm import (
     DeclarativeBase, Mapped, mapped_column, relationship,
@@ -69,6 +69,7 @@ class Prediction(Base):
     __tablename__ = "prediction"
 
     id              : Mapped[int]           = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id         : Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     symbol          : Mapped[str]           = mapped_column(String(20), nullable=False, index=True)
     exchange        : Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # NEW
     ml_prediction   : Mapped[str]           = mapped_column(String(8))
@@ -95,6 +96,7 @@ class BacktestRun(Base):
     __tablename__ = "backtest_run"
 
     id               : Mapped[int]      = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id          : Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     symbol           : Mapped[str]      = mapped_column(String(20), nullable=False, index=True)
     initial_capital  : Mapped[float]    = mapped_column(Float, default=10_000.0)
     period           : Mapped[str]      = mapped_column(String(16), default="2y")
@@ -112,6 +114,7 @@ class PaperSession(Base):
     __tablename__ = "paper_session"
 
     id              : Mapped[int]      = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id         : Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     name            : Mapped[str]      = mapped_column(String(80), default="Default")
     initial_capital : Mapped[float]    = mapped_column(Float, default=100_000.0)
     cash            : Mapped[float]    = mapped_column(Float, default=100_000.0)
@@ -202,7 +205,7 @@ class PaperSnapshot(Base):
 
 def init_db():
     Base.metadata.create_all(bind=engine)
-    _seed_default_session()
+    _ensure_user_scoped_columns()
     _setup_timescale()
 
 
@@ -211,6 +214,28 @@ def _seed_default_session():
         if not db.query(PaperSession).first():
             db.add(PaperSession(name="Default", initial_capital=100_000.0, cash=100_000.0))
             db.commit()
+
+
+def _ensure_user_scoped_columns():
+    inspector = inspect(engine)
+
+    table_columns = {
+        "prediction": {c["name"] for c in inspector.get_columns("prediction")},
+        "backtest_run": {c["name"] for c in inspector.get_columns("backtest_run")},
+        "paper_session": {c["name"] for c in inspector.get_columns("paper_session")},
+    }
+
+    with engine.begin() as conn:
+        if "user_id" not in table_columns["prediction"]:
+            conn.execute(text("ALTER TABLE prediction ADD COLUMN user_id INTEGER"))
+        if "user_id" not in table_columns["backtest_run"]:
+            conn.execute(text("ALTER TABLE backtest_run ADD COLUMN user_id INTEGER"))
+        if "user_id" not in table_columns["paper_session"]:
+            conn.execute(text("ALTER TABLE paper_session ADD COLUMN user_id INTEGER"))
+
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_prediction_user_id ON prediction (user_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_backtest_run_user_id ON backtest_run (user_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_paper_session_user_id ON paper_session (user_id)"))
 
 
 def _setup_timescale():
@@ -267,10 +292,12 @@ def get_latest_price(symbol: str) -> Optional[Price]:
 def save_prediction(
     symbol: str, ml_prediction: str, ml_confidence: float,
     sentiment: str, sent_confidence: float, action: str, reason: str,
+    user_id: int,
     exchange: str = "NYSE",
 ) -> Prediction:
     with SessionLocal() as db:
         obj = Prediction(
+            user_id=user_id,
             symbol=symbol.upper(), exchange=exchange,
             ml_prediction=ml_prediction, ml_confidence=ml_confidence,
             sentiment=sentiment, sent_confidence=sent_confidence,
@@ -282,11 +309,14 @@ def save_prediction(
         return obj
 
 
-def get_decision_history(symbol: str, limit: int = 50) -> list[dict]:
+def get_decision_history(symbol: str, user_id: int, limit: int = 50) -> list[dict]:
     with SessionLocal() as db:
         rows = (
             db.query(Prediction)
-            .filter(Prediction.symbol == symbol.upper())
+            .filter(
+                Prediction.symbol == symbol.upper(),
+                Prediction.user_id == user_id,
+            )
             .order_by(Prediction.created_at.desc())
             .limit(limit)
             .all()
@@ -306,9 +336,16 @@ def get_decision_history(symbol: str, limit: int = 50) -> list[dict]:
         ]
 
 
-def get_action_summary(symbol: str) -> dict:
+def get_action_summary(symbol: str, user_id: int) -> dict:
     with SessionLocal() as db:
-        rows = db.query(Prediction).filter(Prediction.symbol == symbol.upper()).all()
+        rows = (
+            db.query(Prediction)
+            .filter(
+                Prediction.symbol == symbol.upper(),
+                Prediction.user_id == user_id,
+            )
+            .all()
+        )
         summary = {"BUY": 0, "SELL": 0, "HOLD": 0}
         for r in rows:
             summary[r.action] = summary.get(r.action, 0) + 1

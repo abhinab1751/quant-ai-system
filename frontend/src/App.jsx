@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef }  from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { C, FONTS, RADIUS, THEME_CSS }  from './components/theme'
 import { useTheme }                     from './hooks/useTheme'
 import { ThemeToggle }                  from './components/ThemeToggle'
 import AuthPage                         from './pages/AuthPage'
+import OAuthCallbackPage                from './pages/OAuthCallbackPage'
 import PriceTicker      from './components/PriceTicker'
 import DecisionCard     from './components/DecisionCard'
 import EquityChart      from './components/EquityChart'
@@ -20,12 +21,11 @@ import { useStockStream }                            from './hooks/useStockStrea
 import { useToasts, ToastContainer, toast }          from './components/Toast'
 import candleStickLogo                               from './assets/candleStick.png'
 
-
 if (!document.getElementById('qai-fonts')) {
   const l = document.createElement('link')
   l.id   = 'qai-fonts'
   l.rel  = 'stylesheet'
-  l.href = 'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;500;700;900&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap'
+  l.href = 'https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap'
   document.head.appendChild(l)
 }
 
@@ -55,35 +55,13 @@ const GLOBAL_CSS = `
 
   @media (max-width: 1100px) {
     .qai-dashboard-shell { min-height: 100vh; height: auto; overflow-x: hidden; overflow-y: auto; }
-    .qai-dashboard-header {
-      height: auto !important;
-      padding: 12px 14px !important;
-      gap: 12px !important;
-      align-items: stretch !important;
-    }
-    .qai-dashboard-header-inner {
-      width: 100%;
-      flex-wrap: wrap;
-      gap: 12px !important;
-      padding: 0 !important;
-    }
-    .qai-dashboard-logo {
-      width: auto !important;
-      border-right: none !important;
-      padding: 0 !important;
-      height: auto !important;
-    }
+    .qai-dashboard-header { height: auto !important; padding: 12px 14px !important; gap: 12px !important; align-items: stretch !important; }
+    .qai-dashboard-header-inner { width: 100%; flex-wrap: wrap; gap: 12px !important; padding: 0 !important; }
+    .qai-dashboard-logo { width: auto !important; border-right: none !important; padding: 0 !important; height: auto !important; }
     .qai-dashboard-search { flex: 1 1 260px; max-width: none !important; min-width: 220px; }
     .qai-dashboard-actions { margin-left: 0 !important; width: 100%; justify-content: flex-end; flex-wrap: wrap; }
     .qai-dashboard-body { flex-direction: column; overflow: visible; min-height: auto; }
-    .qai-dashboard-sidebar {
-      width: 100% !important;
-      max-height: none !important;
-      border-right: none !important;
-      border-bottom: 1px solid var(--qai-border);
-      overflow: visible !important;
-      height: auto !important;
-    }
+    .qai-dashboard-sidebar { width: 100% !important; max-height: none !important; border-right: none !important; border-bottom: 1px solid var(--qai-border); overflow: visible !important; height: auto !important; }
     .qai-dashboard-main { height: auto !important; padding: 16px !important; overflow: visible !important; }
     .qai-overview-grid { grid-template-columns: 1fr !important; }
     .qai-dashboard-topbar { flex-direction: column; align-items: flex-start !important; gap: 12px; }
@@ -100,17 +78,24 @@ function getStoredUser() {
   try { const u = localStorage.getItem('qai_user'); return u ? JSON.parse(u) : null } catch { return null }
 }
 
+function isOAuthCallback() {
+  return window.location.pathname === '/oauth-callback'
+}
+
 export default function App() {
   const { isDark, toggle, theme, setTheme } = useTheme()
-  const [user, setUser] = useState(getStoredUser)
+  const [user, setUser]     = useState(getStoredUser)
   const [authMode, setAuthMode] = useState(null)
 
   const handleAuthSuccess = (u) => {
     setUser(u)
     setAuthMode(null)
+    if (window.location.pathname !== '/') {
+      window.history.replaceState({}, '', '/')
+    }
   }
 
-  const openLogin = () => setAuthMode('login')
+  const openLogin  = () => setAuthMode('login')
   const openSignup = () => setAuthMode('signup')
   const goToLanding = () => setAuthMode(null)
 
@@ -124,32 +109,39 @@ export default function App() {
   return (
     <>
       <style>{GLOBAL_CSS}</style>
-      {!user && !authMode
-        ? <LandingPage onLogin={openLogin} onSignup={openSignup} isDark={isDark} onToggleTheme={toggle} />
-        : !user
-          ? <AuthPage onSuccess={handleAuthSuccess} onBack={goToLanding} isDark={isDark} onToggle={toggle} initialMode={authMode} />
-        : <Dashboard user={user} onLogout={handleLogout} isDark={isDark} toggle={toggle} theme={theme} setTheme={setTheme} />
+
+      {/* OAuth callback intercept – highest priority */}
+      {isOAuthCallback() && !user
+        ? <OAuthCallbackPage onSuccess={handleAuthSuccess} />
+
+        : !user && !authMode
+          ? <LandingPage onLogin={openLogin} onSignup={openSignup} isDark={isDark} onToggleTheme={toggle} />
+
+          : !user
+            ? <AuthPage onSuccess={handleAuthSuccess} onBack={goToLanding} isDark={isDark} onToggle={toggle} initialMode={authMode} />
+
+            : <Dashboard key={user?.id || user?.email || 'dashboard'} user={user} onLogout={handleLogout} isDark={isDark} toggle={toggle} theme={theme} setTheme={setTheme} />
       }
     </>
   )
 }
 
 const NAV = [
-  { id: 'overview',  label: 'Dashboard',   icon: GridIcon   },
-  { id: 'portfolio', label: 'Portfolio',   icon: WalletIcon },
-  { id: 'paper',     label: 'Paper Trade', icon: PaperIcon  },
-  { id: 'backtest',  label: 'Backtest',    icon: TradeIcon  },
-  { id: 'heatmap',   label: 'Heatmap',     icon: ExchIcon   },
-  { id: 'history',   label: 'History',     icon: HistIcon   },
-  { id: 'model',     label: 'Analytics',   icon: ChartIcon  },
-  { id: 'ai',        label: 'AI Terminal', icon: AIIcon     },
-  { id: 'intelligence',label: 'Trade Brief',   icon: BrainIcon  },
+  { id: 'overview',     label: 'Dashboard',   icon: GridIcon   },
+  { id: 'portfolio',    label: 'Portfolio',   icon: WalletIcon },
+  { id: 'paper',        label: 'Paper Trade', icon: PaperIcon  },
+  { id: 'backtest',     label: 'Backtest',    icon: TradeIcon  },
+  { id: 'heatmap',      label: 'Heatmap',     icon: ExchIcon   },
+  { id: 'history',      label: 'History',     icon: HistIcon   },
+  { id: 'model',        label: 'Analytics',   icon: ChartIcon  },
+  { id: 'ai',           label: 'AI Terminal', icon: AIIcon     },
+  { id: 'intelligence', label: 'Trade Brief', icon: BrainIcon  },
 ]
 
 function Dashboard({ user, onLogout, isDark, toggle, theme, setTheme }) {
-  const [symbol, setSymbol] = useState('AAPL')
-  const [input,  setInput]  = useState('AAPL')
-  const [tab,    setTab]    = useState('overview')
+  const [symbol, setSymbol]       = useState('AAPL')
+  const [input,  setInput]        = useState('AAPL')
+  const [tab,    setTab]          = useState('overview')
   const [showUserMenu, setShowUserMenu] = useState(false)
   const mainRef = useRef(null)
 
@@ -162,13 +154,14 @@ function Dashboard({ user, onLogout, isDark, toggle, theme, setTheme }) {
   }, [decision])
 
   useEffect(() => {
-    const main = mainRef.current
-    if (!main) return
-    main.scrollTo({ top: 0, behavior: 'auto' })
+    mainRef.current?.scrollTo({ top: 0, behavior: 'auto' })
   }, [tab])
 
   const selectSymbol = (s) => { setSymbol(s); setInput(s) }
   const handleSearch = (e) => { e.preventDefault(); const s = input.trim().toUpperCase(); if (s) selectSymbol(s) }
+
+  const avatarInitial = (user.username || user.email || 'U')[0].toUpperCase()
+  const hasAvatar     = !!user.avatar_url
 
   return (
     <div className="qai-dashboard-shell" style={{ background: C.pageBg }}>
@@ -179,31 +172,20 @@ function Dashboard({ user, onLogout, isDark, toggle, theme, setTheme }) {
         display: 'flex', alignItems: 'center', gap: 16, padding: '0 20px 0 0',
         boxShadow: C.shadow, position: 'sticky', top: 0, zIndex: 200, flexShrink: 0,
       }}>
-        {/* Logo */}
         <div className="qai-dashboard-header-inner" style={{
           width: 240, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10,
           padding: '0 20px', borderRight: `1px solid ${C.border}`, height: '100%',
         }}>
-          <img
-            src={candleStickLogo}
-            alt="QuantAI"
-            style={{ width: 34, height: 34, objectFit: 'contain', flexShrink: 0 }}
-          />
+          <img src={candleStickLogo} alt="QuantAI" style={{ width: 34, height: 34, objectFit: 'contain', flexShrink: 0 }} />
           <span style={{ fontSize: 18, fontWeight: 800, color: C.text0, letterSpacing: '-0.03em' }}>
             Quant<span style={{ color: C.blue }}>AI</span>
           </span>
         </div>
 
-        {/* Search */}
         <form className="qai-dashboard-search" onSubmit={handleSearch} style={{ flex: 1, maxWidth: 340, position: 'relative' }}>
-          <div style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }}>
-            <SearchIcon />
-          </div>
+          <div style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }}><SearchIcon /></div>
           <input value={input} onChange={e => setInput(e.target.value.toUpperCase())} placeholder="Search symbol…"
-            style={{
-              width: '100%', background: C.inputBg, border: `1.5px solid ${C.border}`,
-              borderRadius: RADIUS.full, padding: '8px 14px 8px 38px', fontSize: 13, color: C.text1,
-            }} />
+            style={{ width: '100%', background: C.inputBg, border: `1.5px solid ${C.border}`, borderRadius: RADIUS.full, padding: '8px 14px 8px 38px', fontSize: 13, color: C.text1 }} />
         </form>
 
         <PriceTicker symbol={symbol} priceData={price} connected={connected} compact />
@@ -212,68 +194,64 @@ function Dashboard({ user, onLogout, isDark, toggle, theme, setTheme }) {
           <LiveClock />
           <ThemeToggle isDark={isDark} onToggle={toggle} />
 
-          {/* Bell */}
-          <button style={{
-            width: 36, height: 36, borderRadius: RADIUS.md, background: C.inputBg,
-            border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center',
-            justifyContent: 'center', cursor: 'pointer', position: 'relative',
-          }}>
+          <button style={{ width: 36, height: 36, borderRadius: RADIUS.md, background: C.inputBg, border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative' }}>
             <BellIcon />
             {decision && decision.action !== 'HOLD' && (
-              <div style={{
-                position: 'absolute', top: 8, right: 8, width: 7, height: 7,
-                borderRadius: '50%', background: C.red, border: `2px solid ${C.headerBg}`,
-              }} />
+              <div style={{ position: 'absolute', top: 8, right: 8, width: 7, height: 7, borderRadius: '50%', background: C.red, border: `2px solid ${C.headerBg}` }} />
             )}
           </button>
 
           {/* User menu */}
           <div style={{ position: 'relative' }}>
-            <button
-              onClick={() => setShowUserMenu(v => !v)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                background: C.inputBg, border: `1px solid ${C.border}`,
-                borderRadius: RADIUS.md, padding: '5px 12px 5px 8px', cursor: 'pointer',
-              }}
-            >
-              <div style={{
-                width: 28, height: 28, borderRadius: '50%',
-                background: `linear-gradient(135deg, ${C.blue}, #60A5FA)`,
+            <button onClick={() => setShowUserMenu(v => !v)} style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: C.inputBg, border: `1px solid ${C.border}`,
+              borderRadius: RADIUS.md, padding: '5px 12px 5px 8px', cursor: 'pointer',
+            }}>
+              {/* avatar or gradient initials */}
+              <div style={{ width: 28, height: 28, borderRadius: '50%', overflow: 'hidden', flexShrink: 0,
+                background: hasAvatar ? 'transparent' : `linear-gradient(135deg, ${C.blue}, #60A5FA)`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
-                <span style={{ fontSize: 11, fontWeight: 800, color: '#fff' }}>
-                  {(user.username || user.email || 'U')[0].toUpperCase()}
-                </span>
+                {hasAvatar
+                  ? <img src={user.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : <span style={{ fontSize: 11, fontWeight: 800, color: '#fff' }}>{avatarInitial}</span>
+                }
               </div>
               <span style={{ fontSize: 13, fontWeight: 600, color: C.text1, maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {user.username || user.email}
               </span>
+              {/* provider badge */}
+              {user.auth_provider && user.auth_provider !== 'local' && (
+                <span style={{ fontSize: 9, fontWeight: 700, color: C.blue, background: C.blueLight, borderRadius: RADIUS.full, padding: '1px 6px' }}>
+                  {user.auth_provider === 'google' ? 'G' : 'X'}
+                </span>
+              )}
               <span style={{ fontSize: 10, color: C.text3 }}>▾</span>
             </button>
 
-            {/* Dropdown */}
             {showUserMenu && (
               <>
                 <div onClick={() => setShowUserMenu(false)} style={{ position: 'fixed', inset: 0, zIndex: 299 }} />
                 <div style={{
-                  position: 'absolute', right: 0, top: 44, width: 200, zIndex: 300,
+                  position: 'absolute', right: 0, top: 44, width: 220, zIndex: 300,
                   background: C.cardBg, border: `1px solid ${C.border}`,
                   borderRadius: RADIUS.lg, boxShadow: C.shadowLg, overflow: 'hidden',
                 }}>
                   <div style={{ padding: '12px 14px', borderBottom: `1px solid ${C.border}` }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text0 }}>
-                      {user.full_name || user.username}
-                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text0 }}>{user.full_name || user.username}</div>
                     <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>{user.email}</div>
+                    {user.auth_provider && user.auth_provider !== 'local' && (
+                      <div style={{ fontSize: 10, color: C.blue, marginTop: 4, fontWeight: 600 }}>
+                        Signed in via {user.auth_provider}
+                      </div>
+                    )}
                   </div>
                   <button onClick={() => { setShowUserMenu(false); onLogout() }} style={{
                     width: '100%', padding: '11px 14px', background: 'none', border: 'none',
                     textAlign: 'left', fontSize: 13, color: C.red, cursor: 'pointer',
                     fontFamily: FONTS.sans, fontWeight: 600,
-                  }}>
-                    Sign out
-                  </button>
+                  }}>Sign out</button>
                 </div>
               </>
             )}
@@ -283,10 +261,7 @@ function Dashboard({ user, onLogout, isDark, toggle, theme, setTheme }) {
 
       {/* ── BODY ── */}
       <div className="qai-dashboard-body">
-        <aside style={{
-          width: 240, flexShrink: 0, background: C.sidebarBg,
-          borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', overflowY: 'auto',
-        }} className="qai-dashboard-sidebar">
+        <aside style={{ width: 240, flexShrink: 0, background: C.sidebarBg, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', overflowY: 'auto' }} className="qai-dashboard-sidebar">
           <Watchlist activeSymbol={symbol} onSelect={selectSymbol} />
           <nav style={{ padding: '4px 12px 12px' }}>
             <NavLabel>Main menu</NavLabel>
@@ -294,16 +269,12 @@ function Dashboard({ user, onLogout, isDark, toggle, theme, setTheme }) {
               <NavItem key={item.id} item={item} active={tab === item.id} onClick={() => setTab(item.id)} />
             ))}
             <NavLabel style={{ marginTop: 16 }}>Analytics</NavLabel>
-              {NAV.slice(4).map(item => (   
-                <NavItem key={item.id} item={item} active={tab === item.id} onClick={() => setTab(item.id)} />
-              ))}
+            {NAV.slice(4).map(item => (
+              <NavItem key={item.id} item={item} active={tab === item.id} onClick={() => setTab(item.id)} />
+            ))}
           </nav>
-
-          {/* Theme selector */}
           <div style={{ padding: '12px 16px', borderTop: `1px solid ${C.border}`, background: C.inputBg, marginTop: 'auto' }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: C.text3, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>
-              Appearance
-            </div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.text3, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>Appearance</div>
             <div style={{ display: 'flex', background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: RADIUS.md, padding: 3, gap: 3 }}>
               {[{ value: 'light', label: 'Light', sym: '☀' }, { value: 'dark', label: 'Dark', sym: '☽' }].map(opt => {
                 const active = theme === opt.value
@@ -323,7 +294,6 @@ function Dashboard({ user, onLogout, isDark, toggle, theme, setTheme }) {
           </div>
         </aside>
 
-        {/* Main content */}
         <main ref={mainRef} className="qai-dashboard-main" style={{ animation: 'cb-fade-in 0.25s ease' }}>
           <div className="qai-dashboard-topbar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
@@ -341,14 +311,14 @@ function Dashboard({ user, onLogout, isDark, toggle, theme, setTheme }) {
             )}
           </div>
 
-          {tab === 'overview'  && <div style={{ display:'flex', flexDirection:'column', gap:20 }}><div className="qai-overview-grid"><DecisionCard symbol={symbol} liveDecision={decision} /><AIChat symbol={symbol} decisionData={decision} /></div><CandlestickChart symbol={symbol} trades={[]} /></div>}
-          {tab === 'portfolio' && <PortfolioTracker />}
-          {tab === 'paper'     && <PaperTrading activeSymbol={symbol} liveDecision={decision} />}
-          {tab === 'backtest'  && <EquityChart symbol={symbol} />}
-          {tab === 'heatmap'   && <MarketHeatmap onSelect={selectSymbol} />}
-          {tab === 'history'   && <HistoryTable symbol={symbol} />}
-          {tab === 'model'     && <FeatureChart symbol={symbol} />}
-          {tab === 'ai'        && <AIChat symbol={symbol} decisionData={decision} />}
+          {tab === 'overview'     && <div style={{ display:'flex', flexDirection:'column', gap:20 }}><div className="qai-overview-grid"><DecisionCard symbol={symbol} liveDecision={decision} /><AIChat symbol={symbol} decisionData={decision} /></div><CandlestickChart symbol={symbol} trades={[]} /></div>}
+          {tab === 'portfolio'    && <PortfolioTracker />}
+          {tab === 'paper'        && <PaperTrading userId={user?.id} activeSymbol={symbol} liveDecision={decision} />}
+          {tab === 'backtest'     && <EquityChart symbol={symbol} />}
+          {tab === 'heatmap'      && <MarketHeatmap onSelect={selectSymbol} />}
+          {tab === 'history'      && <HistoryTable userId={user?.id} symbol={symbol} />}
+          {tab === 'model'        && <FeatureChart symbol={symbol} />}
+          {tab === 'ai'           && <AIChat symbol={symbol} decisionData={decision} />}
           {tab === 'intelligence' && <TradeIntelligence symbol={symbol} />}
         </main>
       </div>
@@ -392,16 +362,7 @@ function LiveClock() {
     </div>
   )
 }
-function BrainIcon({ active }) {
-  const c = active ? C.blue : C.text2
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c}
-      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.46 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/>
-      <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.46 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/>
-    </svg>
-  )
-}
+function BrainIcon({active}){const c=active?C.blue:C.text2;return(<svg width="18"height="18"viewBox="0 0 24 24"fill="none"stroke={c}strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.46 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.46 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></svg>)}
 function GridIcon({active}){const c=active?C.blue:C.text2;return(<svg width="18"height="18"viewBox="0 0 24 24"fill="none"stroke={c}strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><rect x="3"y="3"width="7"height="7"rx="1"/><rect x="14"y="3"width="7"height="7"rx="1"/><rect x="3"y="14"width="7"height="7"rx="1"/><rect x="14"y="14"width="7"height="7"rx="1"/></svg>)}
 function WalletIcon({active}){const c=active?C.blue:C.text2;return(<svg width="18"height="18"viewBox="0 0 24 24"fill="none"stroke={c}strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M16 3H8L4 7h16l-4-4z"/><circle cx="17"cy="13"r="1"fill={c}/></svg>)}
 function PaperIcon({active}){const c=active?C.blue:C.text2;return(<svg width="18"height="18"viewBox="0 0 24 24"fill="none"stroke={c}strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16"y1="13"x2="8"y2="13"/><line x1="16"y1="17"x2="8"y2="17"/></svg>)}

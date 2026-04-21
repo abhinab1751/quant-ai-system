@@ -12,23 +12,20 @@ from db.database import SessionLocal
 
 logger = logging.getLogger(__name__)
 
-SECRET_KEY            = os.getenv("JWT_SECRET_KEY", "CHANGE-ME-IN-PRODUCTION-USE-openssl-rand-hex-32")
-ALGORITHM             = "HS256"
-ACCESS_TOKEN_MINUTES  = int(os.getenv("ACCESS_TOKEN_MINUTES",  "30"))
-REFRESH_TOKEN_DAYS    = int(os.getenv("REFRESH_TOKEN_DAYS",    "7"))
-
+SECRET_KEY           = os.getenv("JWT_SECRET_KEY", "CHANGE-ME-IN-PRODUCTION-USE-openssl-rand-hex-32")
+ALGORITHM            = "HS256"
+ACCESS_TOKEN_MINUTES = int(os.getenv("ACCESS_TOKEN_MINUTES",  "30"))
+REFRESH_TOKEN_DAYS   = int(os.getenv("REFRESH_TOKEN_DAYS",    "7"))
 
 def hash_password(plain: str) -> str:
-    hashed = bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt())
-    return hashed.decode("utf-8")
+    return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
     try:
         return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
-    except (ValueError, TypeError, AttributeError):
+    except Exception:
         return False
-
 
 def create_access_token(user_id: int, email: str) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_MINUTES)
@@ -49,6 +46,7 @@ def create_refresh_token(user_id: int) -> str:
 def decode_token(token: str) -> dict:
     return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
 
+
 class AuthService:
 
     def get_user_by_email(self, email: str) -> Optional[User]:
@@ -63,7 +61,21 @@ class AuthService:
         with SessionLocal() as db:
             return db.query(User).filter(User.username == username.lower().strip()).first()
 
-    def create_user(self, email: str, username: str, password: str, full_name: str = "") -> User:
+    def get_user_by_provider(self, provider: str, provider_id: str) -> Optional[User]:
+        with SessionLocal() as db:
+            return (
+                db.query(User)
+                .filter(User.auth_provider == provider, User.provider_id == provider_id)
+                .first()
+            )
+
+    def create_user(
+        self,
+        email: str,
+        username: str,
+        password: str,
+        full_name: str = "",
+    ) -> User:
         email    = email.lower().strip()
         username = username.lower().strip()
 
@@ -71,7 +83,6 @@ class AuthService:
             raise ValueError("An account with this email already exists.")
         if self.get_user_by_username(username):
             raise ValueError("This username is already taken.")
-
         if len(password) < 8:
             raise ValueError("Password must be at least 8 characters.")
         if len(username) < 3:
@@ -83,33 +94,97 @@ class AuthService:
                 username        = username,
                 hashed_password = hash_password(password),
                 full_name       = full_name,
+                auth_provider   = "local",
                 is_active       = True,
-                is_verified     = True,  
+                is_verified     = True,
             )
             db.add(user)
             db.commit()
             db.refresh(user)
+            db.expunge(user)
             return user
+
+    def get_or_create_oauth_user(self, profile: dict) -> User:
+        provider    = profile["provider"]
+        provider_id = profile["provider_id"]
+        email       = profile.get("email", "").lower().strip()
+        name        = profile.get("name", "")
+        avatar_url  = profile.get("avatar_url", "")
+
+        user = self.get_user_by_provider(provider, provider_id)
+        if user:
+            with SessionLocal() as db:
+                u = db.get(User, user.id)
+                u.avatar_url = avatar_url
+                u.last_login = datetime.utcnow()
+                db.commit()
+                db.refresh(u)
+                db.expunge(u)
+            return u
+
+        if email:
+            user = self.get_user_by_email(email)
+            if user:
+                with SessionLocal() as db:
+                    u = db.get(User, user.id)
+                    u.auth_provider = provider
+                    u.provider_id   = provider_id
+                    u.avatar_url    = avatar_url or u.avatar_url
+                    u.is_verified   = True
+                    u.last_login    = datetime.utcnow()
+                    db.commit()
+                    db.refresh(u)
+                    db.expunge(u)
+                return u
+
+        username = self._unique_username(profile.get("username") or name or provider_id)
+        if not email:
+            email = f"{provider}_{provider_id}@oauth.quantai"
+
+        with SessionLocal() as db:
+            user = User(
+                email           = email,
+                username        = username,
+                hashed_password = None,      
+                full_name       = name,
+                avatar_url      = avatar_url,
+                auth_provider   = provider,
+                provider_id     = provider_id,
+                is_active       = True,
+                is_verified     = True,
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+            db.expunge(user)
+            return user
+
+    def _unique_username(self, base: str) -> str:
+        import re, random
+        slug = re.sub(r"[^a-zA-Z0-9_]", "_", base).lower()[:30] or "user"
+        if not self.get_user_by_username(slug):
+            return slug
+        for _ in range(20):
+            candidate = f"{slug}_{random.randint(1000, 9999)}"
+            if not self.get_user_by_username(candidate):
+                return candidate
+        return f"{slug}_{id(base)}"[:30]
 
     def authenticate(self, email_or_username: str, password: str) -> Optional[User]:
         val = email_or_username.lower().strip()
         with SessionLocal() as db:
             user = (
                 db.query(User).filter(User.email == val).first()
-                or
-                db.query(User).filter(User.username == val).first()
+                or db.query(User).filter(User.username == val).first()
             )
-            if not user:
+            if not user or not user.is_active:
                 return None
-            if not user.is_active:
+            if not user.hashed_password:
                 return None
             if not verify_password(password, user.hashed_password):
                 return None
-
             user.last_login = datetime.utcnow()
             db.commit()
-            # Prevent DetachedInstanceError after session close when callers
-            # access user fields to build token response.
             db.refresh(user)
             db.expunge(user)
             return user
@@ -120,10 +195,12 @@ class AuthService:
             "refresh_token": create_refresh_token(user.id),
             "token_type":    "bearer",
             "user": {
-                "id":        user.id,
-                "email":     user.email,
-                "username":  user.username,
-                "full_name": user.full_name,
+                "id":           user.id,
+                "email":        user.email,
+                "username":     user.username,
+                "full_name":    user.full_name,
+                "avatar_url":   user.avatar_url,
+                "auth_provider": user.auth_provider,
             },
         }
 
@@ -132,14 +209,11 @@ class AuthService:
             payload = decode_token(refresh_token)
         except JWTError:
             raise ValueError("Invalid or expired refresh token.")
-
         if payload.get("type") != "refresh":
             raise ValueError("Token is not a refresh token.")
-
         user = self.get_user_by_id(int(payload["sub"]))
         if not user or not user.is_active:
             raise ValueError("User not found or deactivated.")
-
         return {
             "access_token": create_access_token(user.id, user.email),
             "token_type":   "bearer",
@@ -147,7 +221,9 @@ class AuthService:
 
     def change_password(self, user_id: int, old_password: str, new_password: str) -> bool:
         user = self.get_user_by_id(user_id)
-        if not user or not verify_password(old_password, user.hashed_password):
+        if not user or not user.hashed_password:
+            return False
+        if not verify_password(old_password, user.hashed_password):
             return False
         if len(new_password) < 8:
             raise ValueError("Password must be at least 8 characters.")
@@ -156,6 +232,7 @@ class AuthService:
             u.hashed_password = hash_password(new_password)
             db.commit()
         return True
+
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer

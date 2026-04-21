@@ -2,6 +2,22 @@ import { useState, useRef, useEffect } from 'react'
 import { downloadTradeIntelligenceReport } from '../api/client'
 import { C, FONTS, RADIUS, Card, CardHeader } from './theme'
 
+async function parseResponseBody(res) {
+  const contentType = res.headers.get('content-type') || ''
+  if (contentType.includes('application/json')) {
+    return res.json().catch(() => null)
+  }
+
+  const text = await res.text().catch(() => '')
+  if (!text) return null
+
+  try {
+    return JSON.parse(text)
+  } catch {
+    return { detail: text }
+  }
+}
+
 async function fetchTradeIntelligence(symbol, intent) {
   const token = localStorage.getItem('qai_access')
   if (!token) {
@@ -15,11 +31,11 @@ async function fetchTradeIntelligence(symbol, intent) {
     },
     body: JSON.stringify({ symbol, intent }),
   })
-  const data = await res.json()
+  const data = await parseResponseBody(res)
   if (res.status === 401) {
     throw new Error('Your session expired. Please sign in again.')
   }
-  if (!res.ok) throw new Error(data.detail || `Error ${res.status}`)
+  if (!res.ok) throw new Error(data?.detail || data?.message || data?.error || `Error ${res.status}`)
   return data
 }
 

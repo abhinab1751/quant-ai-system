@@ -1,29 +1,72 @@
 import { useEffect, useState } from 'react'
-import { getHistory, getHistorySummary } from '../api/client'
+import { getDecision, getHistory, getHistorySummary } from '../api/client'
 import { C, FONTS, RADIUS, Card, CardHeader, Spinner } from './theme'
 
 const AC = { BUY: C.green, SELL: C.red, HOLD: C.amber }
 const ML = { UP: C.green, DOWN: C.red }
 const SC = { POSITIVE: C.green, NEGATIVE: C.red, NEUTRAL: C.amber }
 
-export function HistoryTable({ symbol }) {
+export function HistoryTable({ symbol, userId }) {
   const [rows,    setRows]    = useState([])
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(true)
   const [filter,  setFilter]  = useState('ALL')
+  const [error,   setError]   = useState(null)
 
   useEffect(() => {
-    if (!symbol) return
-    setLoading(true)
-    Promise.all([getHistory(symbol, 50), getHistorySummary(symbol)])
-      .then(([h, s]) => { setRows(h.history || []); setSummary(s.summary) })
-      .catch(console.error).finally(() => setLoading(false))
-  }, [symbol])
+    if (!symbol || !userId) return
+    let cancelled = false
+
+    // Clear prior account data immediately on user/symbol switch.
+    setRows([])
+    setSummary(null)
+
+    const load = async (allowRetry = false) => {
+      setLoading(true)
+      setError(null)
+      try {
+        // Trigger decision computation/persistence for this user-symbol first.
+        await getDecision(symbol)
+        const [h, s] = await Promise.all([getHistory(symbol, 50), getHistorySummary(symbol)])
+        if (cancelled) return
+
+        const nextRows = h.history || []
+        setRows(nextRows)
+        setSummary(s.summary)
+
+        // Decision fetch/persist can race this history call on first load.
+        if (allowRetry && nextRows.length === 0) {
+          setTimeout(() => {
+            if (!cancelled) load(false)
+          }, 1200)
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setError(e.message || 'Failed to load decision history.')
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    load(true)
+
+    return () => { cancelled = true }
+  }, [symbol, userId])
 
   const filtered = filter === 'ALL' ? rows : rows.filter(r => r.action === filter)
   const total    = (summary?.BUY ?? 0) + (summary?.SELL ?? 0) + (summary?.HOLD ?? 0)
 
   if (loading) return <Card><Spinner label="Loading history…" /></Card>
+  if (error) {
+    return (
+      <Card>
+        <div style={{ padding: 20, color: C.red, fontSize: 13 }}>
+          {error}
+        </div>
+      </Card>
+    )
+  }
 
   return (
     <Card>

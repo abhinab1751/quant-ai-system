@@ -47,11 +47,12 @@ export default function DecisionCard({ symbol, liveDecision }) {
     }
   }
 
-  const display = liveDecision ? {
+  // Use authenticated API data as source of truth for user-scoped decisions/history.
+  const display = data || (liveDecision ? {
     decision: { action: liveDecision.action, reason: liveDecision.reason, strength: liveDecision.strength, score: liveDecision.score, signals: liveDecision.signals },
     ml_prediction: liveDecision.ml_prediction, ml_confidence: liveDecision.ml_confidence,
     sentiment: liveDecision.sentiment, sentiment_confidence: liveDecision.sent_confidence,
-  } : data
+  } : null)
 
   if (loading) return <Card><Spinner label={`Analysing ${symbol}…`} /></Card>
   if (error)   return (

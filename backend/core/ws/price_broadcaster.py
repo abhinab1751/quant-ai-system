@@ -1,20 +1,21 @@
 import asyncio
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 from agents.data_agent import DataAgent
 from core.ws.connection_manager import manager
+from core.kafka_producer import kafka
 from db.database import save_price
 
 logger     = logging.getLogger(__name__)
 data_agent = DataAgent()
 
-POLL_INTERVAL            = 5      
-PRICE_SAVE_INTERVAL      = 60     
-PRICE_CHANGE_THRESHOLD_PCT = 0.01 
+POLL_INTERVAL              = 5
+PRICE_SAVE_INTERVAL        = 60
+PRICE_CHANGE_THRESHOLD_PCT = 0.01
 
-_state:  dict[str, dict] = {}
-_tasks:  dict[str, asyncio.Task] = {}
+_state: dict[str, dict] = {}
+_tasks: dict[str, asyncio.Task] = {}
 
 
 def ensure_streaming(symbol: str) -> None:
@@ -36,8 +37,8 @@ async def _stream_loop(symbol: str) -> None:
     if symbol not in _state:
         _state[symbol] = {
             "last_price":       None,
-            "last_saved":       None,   
-            "last_saved_price": None,   
+            "last_saved":       None,
+            "last_saved_price": None,
         }
 
     while True:
@@ -67,8 +68,14 @@ async def _stream_loop(symbol: str) -> None:
                 }
                 await manager.broadcast(symbol, payload)
 
-                should_save = _should_save(state, price, now)
+                kafka.publish_price(
+                    symbol=symbol,
+                    price=price,
+                    change=change,
+                    change_pct=change_pct,
+                )
 
+                should_save = _should_save(state, price, now)
                 if should_save:
                     await asyncio.to_thread(save_price, symbol, price)
                     state["last_saved"]       = now
@@ -82,6 +89,7 @@ async def _stream_loop(symbol: str) -> None:
             return
         except Exception as e:
             logger.warning(f"[Broadcaster] Error for {symbol}: {e}")
+            kafka.publish_error("price_broadcaster", str(e), symbol=symbol)
             await manager.broadcast(symbol, {
                 "type":    "error",
                 "symbol":  symbol,
@@ -91,70 +99,18 @@ async def _stream_loop(symbol: str) -> None:
         await asyncio.sleep(POLL_INTERVAL)
 
 
-def _should_save(state: dict, price: float, now: datetime) -> bool:
-
+def _should_save(state: dict, price: float, now) -> bool:
     last_saved       = state["last_saved"]
     last_saved_price = state["last_saved_price"]
 
     if last_saved is None:
         return True
 
-    seconds_since_save = (now - last_saved).total_seconds()
+    seconds_since = (now - last_saved).total_seconds()
 
-    if last_saved_price and seconds_since_save >= 10:
+    if last_saved_price and seconds_since >= 10:
         move_pct = abs((price - last_saved_price) / last_saved_price * 100)
         if move_pct >= PRICE_CHANGE_THRESHOLD_PCT:
             return True
 
-    return seconds_since_save >= PRICE_SAVE_INTERVAL
-
-
-async def purge_duplicate_prices(symbol: str = None, keep_every_minutes: int = 5):
-    from db.database import engine
-    import sqlalchemy as sa
-
-    async def _purge(sym_filter=None):
-        sql = """
-        DELETE FROM price
-        WHERE id NOT IN (
-            SELECT DISTINCT ON (
-                symbol,
-                date_trunc('minute', fetched_at) / :interval * :interval
-            ) id
-            FROM price
-            {where}
-            ORDER BY
-                symbol,
-                date_trunc('minute', fetched_at) / :interval * :interval,
-                fetched_at DESC
-        )
-        """.format(where=f"WHERE symbol = '{sym_filter}'" if sym_filter else "")
-
-        with engine.connect() as conn:
-            result = conn.execute(
-                sa.text("""
-                DELETE FROM price
-                WHERE id NOT IN (
-                    SELECT id FROM (
-                        SELECT id,
-                               ROW_NUMBER() OVER (
-                                   PARTITION BY symbol,
-                                   (EXTRACT(EPOCH FROM fetched_at)::bigint / :interval)
-                                   ORDER BY fetched_at DESC
-                               ) AS rn
-                        FROM price
-                        {where}
-                    ) ranked
-                    WHERE rn = 1
-                )
-                """.format(where=f"WHERE symbol = :sym" if sym_filter else "")
-                ),
-                {"interval": keep_every_minutes * 60, **({"sym": sym_filter} if sym_filter else {})}
-            )
-            conn.commit()
-            deleted = result.rowcount
-            logger.info(f"[Purge] Removed {deleted} duplicate price rows"
-                        + (f" for {sym_filter}" if sym_filter else " (all symbols)"))
-            return deleted
-
-    return await asyncio.to_thread(_purge, symbol)
+    return seconds_since >= PRICE_SAVE_INTERVAL

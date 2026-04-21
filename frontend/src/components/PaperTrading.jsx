@@ -264,8 +264,8 @@ function EquityCurveMini({ equity, initialCapital }) {
     </svg>
   )
 }
-export default function PaperTrading({ activeSymbol = 'AAPL', liveDecision = null }) {
-  const pt = usePaperTrading()
+export default function PaperTrading({ userId, activeSymbol = 'AAPL', liveDecision = null }) {
+  const pt = usePaperTrading(userId)
 
   const [view,          setView]         = useState('dashboard') 
   const [showTicket,    setShowTicket]    = useState(false)

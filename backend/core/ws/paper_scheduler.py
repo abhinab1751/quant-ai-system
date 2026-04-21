@@ -44,16 +44,18 @@ async def _snapshot_loop() -> None:
         await asyncio.sleep(SNAPSHOT_INTERVAL)
         try:
             with SessionLocal() as db:
-                session_ids = [
-                    s.id
+                sessions = [
+                    (s.id, s.user_id)
                     for s in db.execute(
                         select(PaperSession).where(PaperSession.is_active.is_(True))
                     )
                     .scalars()
                     .all()
                 ]
-            for session_id in session_ids:
-                await asyncio.to_thread(paper_service.record_snapshot, session_id)
+            for session_id, user_id in sessions:
+                if user_id is None:
+                    continue
+                await asyncio.to_thread(paper_service.record_snapshot, session_id, user_id)
         except asyncio.CancelledError:
             return
         except Exception as e:

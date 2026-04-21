@@ -4,22 +4,22 @@ export const THEME_CSS = `
   /* ── Light mode (default) ─────────────────────────────────────── */
   :root,
   [data-theme="light"] {
-    --qai-font-sans:     'Plus Jakarta Sans', 'DM Sans', sans-serif;
-    --qai-font-display:  'Plus Jakarta Sans', sans-serif;
+    --qai-font-sans:     'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --qai-font-display:  'DM Serif Display', Georgia, serif;
     --qai-font-mono:     'JetBrains Mono', 'Fira Code', monospace;
 
-    --qai-page-bg:       #EEF2F8;
+    --qai-page-bg:       #F5F5F3;
     --qai-sidebar-bg:    #FFFFFF;
     --qai-card-bg:       #FFFFFF;
     --qai-header-bg:     #FFFFFF;
-    --qai-input-bg:      #F4F6FB;
-    --qai-row-hover:     #F8FAFD;
+    --qai-input-bg:      #ECECEA;
+    --qai-row-hover:     #F0F0EE;
 
-    --qai-blue:          #2563EB;
-    --qai-blue-dark:     #1D4ED8;
-    --qai-blue-light:    #EFF6FF;
-    --qai-blue-mid:      #DBEAFE;
-    --qai-blue-border:   #BFDBFE;
+    --qai-blue:          #1F1F1F;
+    --qai-blue-dark:     #000000;
+    --qai-blue-light:    #F2F2F0;
+    --qai-blue-mid:      #E4E4E2;
+    --qai-blue-border:   #CFCFCD;
 
     --qai-green:         #16A34A;
     --qai-green-bg:      #F0FDF4;
@@ -32,19 +32,19 @@ export const THEME_CSS = `
     --qai-amber-border:  #FDE68A;
     --qai-purple:        #7C3AED;
 
-    --qai-text0:         #0F172A;
-    --qai-text1:         #1E293B;
-    --qai-text2:         #64748B;
-    --qai-text3:         #94A3B8;
-    --qai-text4:         #CBD5E1;
+    --qai-text0:         #111111;
+    --qai-text1:         #2B2B2B;
+    --qai-text2:         #525252;
+    --qai-text3:         #7A7A7A;
+    --qai-text4:         #A3A3A3;
 
-    --qai-border:        #E2E8F0;
-    --qai-border-focus:  #2563EB;
-    --qai-border-card:   rgba(15,23,42,0.08);
+    --qai-border:        #D4D4D0;
+    --qai-border-focus:  #1F1F1F;
+    --qai-border-card:   rgba(17,17,17,0.08);
 
-    --qai-shadow-sm:     0 1px 3px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04);
-    --qai-shadow-md:     0 4px 16px rgba(15,23,42,0.08), 0 2px 4px rgba(15,23,42,0.04);
-    --qai-shadow-lg:     0 8px 32px rgba(15,23,42,0.10), 0 4px 8px rgba(15,23,42,0.06);
+    --qai-shadow-sm:     0 1px 3px rgba(17,17,17,0.06), 0 1px 2px rgba(17,17,17,0.04);
+    --qai-shadow-md:     0 4px 16px rgba(17,17,17,0.08), 0 2px 4px rgba(17,17,17,0.04);
+    --qai-shadow-lg:     0 8px 32px rgba(17,17,17,0.10), 0 4px 8px rgba(17,17,17,0.06);
 
     /* Toggle button */
     --qai-toggle-bg:     #E2E8F0;
@@ -53,50 +53,50 @@ export const THEME_CSS = `
 
   /* ── Dark mode ─────────────────────────────────────────────────── */
   [data-theme="dark"] {
-    --qai-font-sans:     'Zen Kaku Gothic New', 'Noto Sans JP', sans-serif;
-    --qai-font-display:  'Zen Kaku Gothic New', 'Noto Sans JP', sans-serif;
+    --qai-font-sans:     'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --qai-font-display:  'DM Serif Display', Georgia, serif;
     --qai-font-mono:     'JetBrains Mono', 'Fira Code', monospace;
 
-    --qai-page-bg:       #050505;
-    --qai-sidebar-bg:    #080808;
-    --qai-card-bg:       #0A0A0A;
-    --qai-header-bg:     #050505;
-    --qai-input-bg:      #111111;
-    --qai-row-hover:     #141414;
+    --qai-page-bg:       #0F1612;
+    --qai-sidebar-bg:    #131D17;
+    --qai-card-bg:       #17231C;
+    --qai-header-bg:     #0F1612;
+    --qai-input-bg:      #1D2B22;
+    --qai-row-hover:     #223328;
 
-    --qai-blue:          #E11D48;
-    --qai-blue-dark:     #BE123C;
-    --qai-blue-light:    #2A1118;
-    --qai-blue-mid:      #3A121E;
-    --qai-blue-border:   #4C1D27;
+    --qai-blue:          #9ABF7A;
+    --qai-blue-dark:     #7FA35F;
+    --qai-blue-light:    #1F2F24;
+    --qai-blue-mid:      #2A3D2F;
+    --qai-blue-border:   #3D5644;
 
-    --qai-green:         #22C55E;
-    --qai-green-bg:      #052E16;
-    --qai-green-border:  #14532D;
-    --qai-red:           #FB7185;
-    --qai-red-bg:        #3F0C18;
-    --qai-red-border:    #5D1424;
-    --qai-amber:         #F59E0B;
-    --qai-amber-bg:      #3A2B05;
-    --qai-amber-border:  #6B4E09;
-    --qai-purple:        #A78BFA;
+    --qai-green:         #9BD97C;
+    --qai-green-bg:      #1C3524;
+    --qai-green-border:  #3F6D47;
+    --qai-red:           #E38D86;
+    --qai-red-bg:        #3B1F1C;
+    --qai-red-border:    #5C2F2B;
+    --qai-amber:         #D8B56A;
+    --qai-amber-bg:      #3B3321;
+    --qai-amber-border:  #5D5232;
+    --qai-purple:        #A8B68E;
 
-    --qai-text0:         #F5F5F5;
-    --qai-text1:         #E5E5E5;
-    --qai-text2:         #A3A3A3;
-    --qai-text3:         #737373;
-    --qai-text4:         #404040;
+    --qai-text0:         #EDF4E9;
+    --qai-text1:         #D8E3D2;
+    --qai-text2:         #AABAA3;
+    --qai-text3:         #82917D;
+    --qai-text4:         #5F6D5A;
 
-    --qai-border:        #262626;
-    --qai-border-focus:  #E11D48;
-    --qai-border-card:   rgba(255,255,255,0.06);
+    --qai-border:        #324336;
+    --qai-border-focus:  #9ABF7A;
+    --qai-border-card:   rgba(154,191,122,0.10);
 
-    --qai-shadow-sm:     0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
-    --qai-shadow-md:     0 4px 16px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.2);
-    --qai-shadow-lg:     0 8px 32px rgba(0,0,0,0.5), 0 4px 8px rgba(0,0,0,0.3);
+    --qai-shadow-sm:     0 1px 3px rgba(7,14,10,0.34), 0 1px 2px rgba(7,14,10,0.22);
+    --qai-shadow-md:     0 4px 16px rgba(7,14,10,0.46), 0 2px 4px rgba(7,14,10,0.24);
+    --qai-shadow-lg:     0 8px 32px rgba(7,14,10,0.58), 0 4px 8px rgba(7,14,10,0.34);
 
-    --qai-toggle-bg:     #262626;
-    --qai-toggle-thumb:  #F5F5F5;
+    --qai-toggle-bg:     #2F4234;
+    --qai-toggle-thumb:  #EDF4E9;
   }
 
   /* ── Transitions ────────────────────────────────────────────────── */

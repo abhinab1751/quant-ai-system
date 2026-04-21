@@ -31,10 +31,15 @@ class RiskError(ValueError):
 
 class PaperTradingService:
 
-    def get_or_create_default_session(self) -> PaperSession:
+    def get_or_create_default_session(self, user_id: int) -> PaperSession:
         with SessionLocal() as db:
             session = (
-                db.execute(select(PaperSession).where(PaperSession.is_active.is_(True)))
+                db.execute(
+                    select(PaperSession).where(
+                        (PaperSession.user_id == user_id)
+                        & (PaperSession.is_active.is_(True))
+                    )
+                )
                 .scalars()
                 .first()
             )
@@ -42,41 +47,65 @@ class PaperTradingService:
                 return session
 
             session = PaperSession(
+                user_id=user_id,
                 name="Default",
                 initial_capital=100_000.0,
                 cash=100_000.0,
                 is_active=True,
             )
             db.add(session)
+            db.flush()
+            db.add(
+                PaperSnapshot(
+                    session_id=session.id,
+                    portfolio_value=session.initial_capital,
+                    cash=session.cash,
+                    positions_value=0.0,
+                )
+            )
             db.commit()
             db.refresh(session)
             return session
 
-    def get_session(self, session_id: int) -> PaperSession:
+    def get_session(self, session_id: int, user_id: int) -> PaperSession:
         with SessionLocal() as db:
             session = db.get(PaperSession, session_id)
-            if not session:
+            if not session or session.user_id != user_id:
                 raise ValueError("Session not found")
             return session
 
-    def create_session(self, name: str, initial_capital: float) -> PaperSession:
+    def create_session(self, user_id: int, name: str, initial_capital: float) -> PaperSession:
         with SessionLocal() as db:
-            db.execute(update(PaperSession).values(is_active=False))
+            db.execute(
+                update(PaperSession)
+                .where(PaperSession.user_id == user_id)
+                .values(is_active=False)
+            )
             session = PaperSession(
+                user_id=user_id,
                 name=name,
                 initial_capital=initial_capital,
                 cash=initial_capital,
                 is_active=True,
             )
             db.add(session)
+            db.flush()
+            db.add(
+                PaperSnapshot(
+                    session_id=session.id,
+                    portfolio_value=initial_capital,
+                    cash=initial_capital,
+                    positions_value=0.0,
+                )
+            )
             db.commit()
             db.refresh(session)
             return session
 
-    def reset_session(self, session_id: int) -> PaperSession:
+    def reset_session(self, session_id: int, user_id: int) -> PaperSession:
         with SessionLocal() as db:
             session = db.get(PaperSession, session_id)
-            if not session:
+            if not session or session.user_id != user_id:
                 raise ValueError("Session not found")
 
             db.execute(delete(PaperOrder).where(PaperOrder.session_id == session_id))
@@ -85,12 +114,21 @@ class PaperTradingService:
             db.execute(delete(PaperSnapshot).where(PaperSnapshot.session_id == session_id))
 
             session.cash = session.initial_capital
+            db.add(
+                PaperSnapshot(
+                    session_id=session.id,
+                    portfolio_value=session.initial_capital,
+                    cash=session.initial_capital,
+                    positions_value=0.0,
+                )
+            )
             db.commit()
             db.refresh(session)
             return session
 
     def place_order(
         self,
+        user_id: int,
         session_id: int,
         symbol: str,
         side: str,
@@ -106,7 +144,7 @@ class PaperTradingService:
 
         with SessionLocal() as db:
             session = db.get(PaperSession, session_id)
-            if not session:
+            if not session or session.user_id != user_id:
                 raise ValueError("Session not found")
 
             price = data_agent.get_current_price(symbol)
@@ -302,6 +340,7 @@ class PaperTradingService:
 
     def execute_ai_signal(
         self,
+        user_id: int,
         session_id: int,
         symbol: str,
         action: str,
@@ -313,7 +352,7 @@ class PaperTradingService:
 
         with SessionLocal() as db:
             session = db.get(PaperSession, session_id)
-            if not session:
+            if not session or session.user_id != user_id:
                 raise ValueError("Session not found")
 
             price = data_agent.get_current_price(symbol)
@@ -345,6 +384,7 @@ class PaperTradingService:
 
         try:
             return self.place_order(
+                user_id=user_id,
                 session_id=session_id,
                 symbol=symbol,
                 side=action,
@@ -392,10 +432,10 @@ class PaperTradingService:
             return 0.0
         return (portfolio_value - snap.portfolio_value) / max(snap.portfolio_value, 1)
 
-    def get_portfolio_state(self, session_id: int) -> dict:
+    def get_portfolio_state(self, session_id: int, user_id: int) -> dict:
         with SessionLocal() as db:
             session = db.get(PaperSession, session_id)
-            if not session:
+            if not session or session.user_id != user_id:
                 raise ValueError("Session not found")
 
             positions = (
@@ -462,10 +502,10 @@ class PaperTradingService:
                 "positions": sorted(positions_detail, key=lambda x: -x["market_value"]),
             }
 
-    def record_snapshot(self, session_id: int) -> PaperSnapshot:
+    def record_snapshot(self, session_id: int, user_id: int) -> PaperSnapshot:
         with SessionLocal() as db:
             session = db.get(PaperSession, session_id)
-            if not session:
+            if not session or session.user_id != user_id:
                 raise ValueError("Session not found")
 
             positions = (
@@ -490,10 +530,10 @@ class PaperTradingService:
             db.refresh(snap)
             return snap
 
-    def get_equity_curve(self, session_id: int, limit: int = 500) -> list[dict]:
+    def get_equity_curve(self, session_id: int, user_id: int, limit: int = 500) -> list[dict]:
         with SessionLocal() as db:
             session = db.get(PaperSession, session_id)
-            if not session:
+            if not session or session.user_id != user_id:
                 raise ValueError("Session not found")
 
             snapshots = (
@@ -517,10 +557,10 @@ class PaperTradingService:
                 for s in snapshots
             ]
 
-    def get_trade_history(self, session_id: int, limit: int = 100) -> list[dict]:
+    def get_trade_history(self, session_id: int, user_id: int, limit: int = 100) -> list[dict]:
         with SessionLocal() as db:
             session = db.get(PaperSession, session_id)
-            if not session:
+            if not session or session.user_id != user_id:
                 raise ValueError("Session not found")
 
             trades = (
@@ -550,10 +590,10 @@ class PaperTradingService:
                 for t in trades
             ]
 
-    def get_benchmark_comparison(self, session_id: int) -> dict:
+    def get_benchmark_comparison(self, session_id: int, user_id: int) -> dict:
         with SessionLocal() as db:
             session = db.get(PaperSession, session_id)
-            if not session:
+            if not session or session.user_id != user_id:
                 raise ValueError("Session not found")
 
             snapshots = (

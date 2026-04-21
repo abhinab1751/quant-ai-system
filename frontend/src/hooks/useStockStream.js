@@ -20,8 +20,8 @@ function getWebSocketBase() {
   if (fromEnv) return fromEnv
 
   if (import.meta.env.DEV) {
-    // In dev, connect directly to backend to avoid Vite port/proxy mismatch issues.
-    return 'ws://localhost:8000'
+    // Use IPv4 loopback to avoid localhost->IPv6 resolution issues on some setups.
+    return 'ws://127.0.0.1:8000'
   }
 
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'

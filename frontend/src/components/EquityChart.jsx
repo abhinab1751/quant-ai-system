@@ -1,5 +1,6 @@
 import { useState, useId } from 'react'
 import { C, FONTS, RADIUS, Card, CardHeader, Spinner } from './theme'
+import { runBacktest } from '../api/client'
 
 const SVG = {
   green:      C.green,
@@ -9,28 +10,6 @@ const SVG = {
   text:       C.text3,
   gridLine:   C.border,
   baseline:   C.text3,
-}
-
-async function runBT(symbol, capital, timeoutMs = 90_000) {
-  const ctrl  = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs)
-  try {
-    const res = await fetch(
-      `/api/backtest/run/${encodeURIComponent(symbol)}?initial_capital=${capital}`,
-      { signal: ctrl.signal }
-    )
-    clearTimeout(timer)
-    if (!res.ok) {
-      let detail = `HTTP ${res.status}`
-      try { const j = await res.json(); detail = j.detail || j.message || detail } catch {}
-      throw new Error(detail)
-    }
-    return res.json()
-  } catch (e) {
-    clearTimeout(timer)
-    if (e.name === 'AbortError') throw new Error('Backtest timed out after 90 s — try a shorter period or smaller dataset')
-    throw e
-  }
 }
 
 export default function EquityChart({ symbol }) {
@@ -49,7 +28,7 @@ export default function EquityChart({ symbol }) {
     const start = Date.now()
     const timer = setInterval(() => setElapsed(Math.round((Date.now() - start) / 1000)), 1000)
     try {
-      const result = await runBT(symbol, capital)
+      const result = await runBacktest(symbol, capital)
       setData(result)
       setView('chart')
     } catch (e) {
