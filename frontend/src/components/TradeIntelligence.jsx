@@ -1,6 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
 import { downloadTradeIntelligenceReport } from '../api/client'
 import { C, FONTS, RADIUS, Card, CardHeader } from './theme'
+import brainLogo from '../assets/brain.png'
+import earthLogo from '../assets/earth.png'
+import chartLogo from '../assets/map.png'
+import newsLogo from '../assets/news.png'
+import riskLogo from '../assets/bag.png'
 
 async function parseResponseBody(res) {
   const contentType = res.headers.get('content-type') || ''
@@ -55,6 +60,16 @@ function getVerdictCfg(verdict) {
   if (!verdict) return VERDICT_CFG['EVALUATE']
   const key = Object.keys(VERDICT_CFG).find(k => verdict.toUpperCase().includes(k))
   return key ? VERDICT_CFG[key] : VERDICT_CFG['EVALUATE']
+}
+
+function LogoIcon({ src, alt, size = 18, opacity = 1 }) {
+  return (
+    <img
+      src={src}
+      alt={alt}
+      style={{ width: size, height: size, objectFit: 'contain', opacity, display: 'block' }}
+    />
+  )
 }
 
 function AgentStep({ index, name, icon, status, label }) {
@@ -167,11 +182,11 @@ export default function TradeIntelligence({ symbol }) {
   const timerRefs = useRef([])
   const hasToken = Boolean(localStorage.getItem('qai_access'))
   const agents = [
-    { name: 'Market Context', icon: '🌐', desc: 'Price, Fear/Greed, Session' },
-    { name: 'Technical Analysis', icon: '📊', desc: 'RSI, MACD, Bollinger Bands' },
-    { name: 'Sentiment', icon: '📰', desc: 'Momentum, fear/greed, bias' },
-    { name: 'Risk Assessment', icon: '🛡️', desc: 'Volatility, ATR, Position Size' },
-    { name: 'Synthesis', icon: '🧠', desc: 'Trade Brief Generation' },
+    { name: 'Market Context', icon: <LogoIcon src={earthLogo} alt="Market context" />, desc: 'Price, Fear/Greed, Session' },
+    { name: 'Technical Analysis', icon: <LogoIcon src={chartLogo} alt="Technical analysis" />, desc: 'RSI, MACD, Bollinger Bands' },
+    { name: 'Sentiment', icon: <LogoIcon src={newsLogo} alt="Sentiment" />, desc: 'Momentum, fear/greed, bias' },
+    { name: 'Risk Assessment', icon: <LogoIcon src={riskLogo} alt="Risk assessment" />, desc: 'Volatility, ATR, Position Size' },
+    { name: 'Synthesis', icon: <LogoIcon src={brainLogo} alt="Synthesis" />, desc: 'Trade Brief Generation' },
   ]
 
   useEffect(() => {
@@ -270,7 +285,7 @@ export default function TradeIntelligence({ symbol }) {
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   boxShadow: '0 4px 16px rgba(99,102,241,0.4)',
                 }}>
-                  <span style={{ fontSize: 18 }}>🧠</span>
+                  <LogoIcon src={brainLogo} alt="Trade Intelligence" size={20} />
                 </div>
                 <div>
                   <div style={{ fontSize: 18, fontWeight: 800, color: C.text0, letterSpacing: '-0.02em' }}>
@@ -525,17 +540,17 @@ export default function TradeIntelligence({ symbol }) {
             </div>
             <div style={{ display: 'flex', gap: 16, marginTop: 8 }}>
               {[
-                { icon: '🌐', label: 'Market Context' },
-                { icon: '📊', label: 'Technicals' },
-                { icon: '🛡️', label: 'Risk' },
-                { icon: '🧠', label: 'Synthesis' },
+                { icon: <LogoIcon src={earthLogo} alt="Market Context" size={24} />, label: 'Market Context' },
+                { icon: <LogoIcon src={chartLogo} alt="Technicals" size={24} />, label: 'Technicals' },
+                { icon: <LogoIcon src={riskLogo} alt="Risk" size={24} />, label: 'Risk' },
+                { icon: <LogoIcon src={brainLogo} alt="Synthesis" size={24} />, label: 'Synthesis' },
               ].map(item => (
                 <div key={item.label} style={{
                   display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
                   background: C.inputBg, border: `1px solid ${C.border}`,
                   borderRadius: RADIUS.md, padding: '12px 16px', minWidth: 80,
                 }}>
-                  <span style={{ fontSize: 22 }}>{item.icon}</span>
+                  <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 24 }}>{item.icon}</span>
                   <span style={{ fontSize: 10, fontWeight: 600, color: C.text3 }}>{item.label}</span>
                 </div>
               ))}

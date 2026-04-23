@@ -16,6 +16,7 @@ import MarketHeatmap    from './components/MarketHeatmap'
 import CandlestickChart from './components/CandlestickChart'
 import PaperTrading     from './components/PaperTrading'
 import TradeIntelligence from './components/TradeIntelligence'
+import DashboardOverview from './components/DashboardOverview'
 import LandingPage from './pages/LandingPage'
 import { useStockStream }                            from './hooks/useStockStream'
 import { useToasts, ToastContainer, toast }          from './components/Toast'
@@ -138,24 +139,176 @@ const NAV = [
   { id: 'intelligence', label: 'Trade Brief', icon: BrainIcon  },
 ]
 
+const TAB_TO_PATH = {
+  overview: '/dashboard',
+  portfolio: '/dashboard/portfolio',
+  paper: '/dashboard/paper-trade',
+  backtest: '/dashboard/backtest',
+  heatmap: '/dashboard/heatmap',
+  history: '/dashboard/history',
+  model: '/dashboard/analytics',
+  ai: '/dashboard/ai-terminal',
+  intelligence: '/dashboard/trade-brief',
+}
+
+const PATH_TO_TAB = Object.entries(TAB_TO_PATH).reduce((acc, [tabId, path]) => {
+  acc[path] = tabId
+  return acc
+}, {})
+
+const OPEN_IN_NEW_TAB_IDS = new Set(['paper', 'backtest', 'intelligence'])
+
+function resolveTabFromPath(pathname) {
+  if (PATH_TO_TAB[pathname]) return PATH_TO_TAB[pathname]
+  if (pathname === '/') return 'overview'
+  return 'overview'
+}
+
 function Dashboard({ user, onLogout, isDark, toggle, theme, setTheme }) {
   const [symbol, setSymbol]       = useState('AAPL')
   const [input,  setInput]        = useState('AAPL')
-  const [tab,    setTab]          = useState('overview')
+  const [tab,    setTab]          = useState(() => resolveTabFromPath(window.location.pathname))
   const [showUserMenu, setShowUserMenu] = useState(false)
+  const [showNotifMenu, setShowNotifMenu] = useState(false)
+  const [notifications, setNotifications] = useState([])
   const mainRef = useRef(null)
+  const lastDecisionRef = useRef({ symbol: '', action: '', reason: '', at: 0 })
+  const lastPerfRef = useRef({ symbol: '', bucket: '', at: 0 })
 
   const { price, decision, connected, error } = useStockStream(symbol)
   const { toasts } = useToasts()
 
+  const addNotification = ({ title, message, level = 'neutral' }) => {
+    setNotifications(prev => {
+      const item = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        title,
+        message,
+        level,
+        symbol,
+        read: false,
+        timestamp: new Date().toISOString(),
+      }
+      return [item, ...prev].slice(0, 40)
+    })
+  }
+
+  const markAllNotificationsRead = () => {
+    setNotifications(prev => prev.map(n => (n.read ? n : { ...n, read: true })))
+  }
+
+  const clearNotifications = () => {
+    setNotifications([])
+  }
+
+  const unreadCount = notifications.reduce((count, n) => count + (n.read ? 0 : 1), 0)
+
   useEffect(() => {
-    if (!decision || decision.action === 'HOLD') return
-    toast({ action: decision.action, symbol, message: decision.reason || `${decision.action} signal`, duration: 7000 })
-  }, [decision])
+    if (!decision?.action) return
+
+    const action = String(decision.action).toUpperCase()
+    const reason = (decision.reason || '').trim()
+    const now = Date.now()
+    const last = lastDecisionRef.current
+    const duplicate =
+      last.symbol === symbol &&
+      last.action === action &&
+      last.reason === reason &&
+      now - last.at < 90000
+
+    if (duplicate) return
+
+    lastDecisionRef.current = { symbol, action, reason, at: now }
+
+    if (action === 'BUY') {
+      const msg = reason || `${symbol} looks strong. Best time to buy based on the current model output.`
+      addNotification({ title: `${symbol}: Buy Opportunity`, message: msg, level: 'positive' })
+      toast({ action: 'BUY', symbol, message: msg, duration: 7000 })
+      return
+    }
+
+    if (action === 'SELL') {
+      const msg = reason || `${symbol} momentum is weakening. Consider a sell or tighter risk control.`
+      addNotification({ title: `${symbol}: Sell Alert`, message: msg, level: 'negative' })
+      toast({ action: 'SELL', symbol, message: msg, duration: 7000 })
+      return
+    }
+
+    const holdMsg = reason || `${symbol} is currently in hold mode. Wait for a stronger setup.`
+    addNotification({ title: `${symbol}: Hold Signal`, message: holdMsg, level: 'neutral' })
+  }, [decision, symbol])
+
+  useEffect(() => {
+    const changePct = Number(price?.change_pct)
+    if (!Number.isFinite(changePct)) return
+
+    const now = Date.now()
+    const cooldownMs = 120000
+    const bucket = changePct >= 2 ? 'booming' : changePct <= -2 ? 'terrible' : 'stable'
+
+    if (bucket === 'stable') {
+      lastPerfRef.current = { symbol, bucket: 'stable', at: now }
+      return
+    }
+
+    const last = lastPerfRef.current
+    const inCooldown =
+      last.symbol === symbol &&
+      last.bucket === bucket &&
+      now - last.at < cooldownMs
+
+    if (inCooldown) return
+
+    lastPerfRef.current = { symbol, bucket, at: now }
+
+    if (bucket === 'booming') {
+      const msg = `${symbol} is booming (${changePct.toFixed(2)}% intraday). Momentum is strong.`
+      addNotification({ title: `${symbol}: Strong Performance`, message: msg, level: 'positive' })
+      toast({ action: 'BUY', symbol, message: msg, duration: 6000 })
+      return
+    }
+
+    const msg = `${symbol} shows terrible performance (${changePct.toFixed(2)}% intraday). Watch your risk.`
+    addNotification({ title: `${symbol}: Weak Performance`, message: msg, level: 'negative' })
+    toast({ action: 'SELL', symbol, message: msg, duration: 6000 })
+  }, [price, symbol])
 
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0, behavior: 'auto' })
   }, [tab])
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setTab(resolveTabFromPath(window.location.pathname))
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  const handleTabOpenInNewTab = (nextTab) => {
+    const nextPath = TAB_TO_PATH[nextTab]
+    if (!nextPath) return
+
+    if (!OPEN_IN_NEW_TAB_IDS.has(nextTab)) {
+      setTab(nextTab)
+      if (window.location.pathname !== nextPath) {
+        window.history.pushState({}, '', nextPath)
+      }
+      return
+    }
+
+    const nextUrl = `${window.location.origin}${nextPath}`
+    const popup = window.open(nextUrl, '_blank', 'noopener,noreferrer')
+
+    // Fallback in case the browser blocks popups.
+    if (!popup) {
+      setTab(nextTab)
+      if (window.location.pathname !== nextPath) {
+        window.history.pushState({}, '', nextPath)
+      }
+    }
+  }
 
   const selectSymbol = (s) => { setSymbol(s); setInput(s) }
   const handleSearch = (e) => { e.preventDefault(); const s = input.trim().toUpperCase(); if (s) selectSymbol(s) }
@@ -194,12 +347,93 @@ function Dashboard({ user, onLogout, isDark, toggle, theme, setTheme }) {
           <LiveClock />
           <ThemeToggle isDark={isDark} onToggle={toggle} />
 
-          <button style={{ width: 36, height: 36, borderRadius: RADIUS.md, background: C.inputBg, border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative' }}>
-            <BellIcon />
-            {decision && decision.action !== 'HOLD' && (
-              <div style={{ position: 'absolute', top: 8, right: 8, width: 7, height: 7, borderRadius: '50%', background: C.red, border: `2px solid ${C.headerBg}` }} />
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => {
+                setShowNotifMenu(v => {
+                  const next = !v
+                  if (next) markAllNotificationsRead()
+                  return next
+                })
+              }}
+              style={{ width: 36, height: 36, borderRadius: RADIUS.md, background: C.inputBg, border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative' }}
+              title="Notifications"
+            >
+              <BellIcon />
+              {unreadCount > 0 && (
+                <div style={{
+                  position: 'absolute', top: -4, right: -4,
+                  minWidth: 16, height: 16, borderRadius: RADIUS.full,
+                  background: C.red, color: '#fff', border: `2px solid ${C.headerBg}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 9, fontWeight: 800, padding: '0 4px',
+                }}>
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </div>
+              )}
+            </button>
+
+            {showNotifMenu && (
+              <>
+                <div onClick={() => setShowNotifMenu(false)} style={{ position: 'fixed', inset: 0, zIndex: 289 }} />
+                <div style={{
+                  position: 'absolute', right: 0, top: 44, width: 360, maxHeight: 420,
+                  zIndex: 290, background: C.cardBg, border: `1px solid ${C.border}`,
+                  borderRadius: RADIUS.lg, boxShadow: C.shadowLg, overflow: 'hidden',
+                }}>
+                  <div style={{
+                    padding: '10px 12px', borderBottom: `1px solid ${C.border}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: C.text0 }}>Notifications</div>
+                      <div style={{ fontSize: 10, color: C.text3, marginTop: 2 }}>AI signals and performance alerts</div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <button
+                        onClick={markAllNotificationsRead}
+                        style={{ background: C.inputBg, border: `1px solid ${C.border}`, borderRadius: RADIUS.sm, padding: '4px 8px', fontSize: 10, color: C.text2, cursor: 'pointer', fontWeight: 700 }}
+                      >
+                        Mark read
+                      </button>
+                      <button
+                        onClick={clearNotifications}
+                        style={{ background: C.inputBg, border: `1px solid ${C.border}`, borderRadius: RADIUS.sm, padding: '4px 8px', fontSize: 10, color: C.red, cursor: 'pointer', fontWeight: 700 }}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style={{ maxHeight: 360, overflowY: 'auto' }}>
+                    {notifications.length === 0 && (
+                      <div style={{ padding: 14, fontSize: 12, color: C.text3 }}>
+                        No alerts yet. Keep the stream running to receive buy/sell and momentum notifications.
+                      </div>
+                    )}
+
+                    {notifications.map((n) => {
+                      const tone = n.level === 'positive' ? C.green : n.level === 'negative' ? C.red : C.amber
+                      return (
+                        <div key={n.id} style={{
+                          padding: '10px 12px', borderBottom: `1px solid ${C.border}`,
+                          background: n.read ? 'transparent' : C.inputBg,
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: tone }}>{n.title}</div>
+                            <div style={{ fontSize: 10, color: C.text3, whiteSpace: 'nowrap' }}>
+                              {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                          </div>
+                          <div style={{ fontSize: 12, color: C.text2, marginTop: 5, lineHeight: 1.5 }}>{n.message}</div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </>
             )}
-          </button>
+          </div>
 
           {/* User menu */}
           <div style={{ position: 'relative' }}>
@@ -266,11 +500,11 @@ function Dashboard({ user, onLogout, isDark, toggle, theme, setTheme }) {
           <nav style={{ padding: '4px 12px 12px' }}>
             <NavLabel>Main menu</NavLabel>
             {NAV.slice(0, 4).map(item => (
-              <NavItem key={item.id} item={item} active={tab === item.id} onClick={() => setTab(item.id)} />
+              <NavItem key={item.id} item={item} active={tab === item.id} onClick={() => handleTabOpenInNewTab(item.id)} />
             ))}
             <NavLabel style={{ marginTop: 16 }}>Analytics</NavLabel>
             {NAV.slice(4).map(item => (
-              <NavItem key={item.id} item={item} active={tab === item.id} onClick={() => setTab(item.id)} />
+              <NavItem key={item.id} item={item} active={tab === item.id} onClick={() => handleTabOpenInNewTab(item.id)} />
             ))}
           </nav>
           <div style={{ padding: '12px 16px', borderTop: `1px solid ${C.border}`, background: C.inputBg, marginTop: 'auto' }}>
@@ -311,7 +545,7 @@ function Dashboard({ user, onLogout, isDark, toggle, theme, setTheme }) {
             )}
           </div>
 
-          {tab === 'overview'     && <div style={{ display:'flex', flexDirection:'column', gap:20 }}><div className="qai-overview-grid"><DecisionCard symbol={symbol} liveDecision={decision} /><AIChat symbol={symbol} decisionData={decision} /></div><CandlestickChart symbol={symbol} trades={[]} /></div>}
+          {tab === 'overview'     && <DashboardOverview symbol={symbol} liveDecision={decision} onSelectSymbol={selectSymbol} />}
           {tab === 'portfolio'    && <PortfolioTracker />}
           {tab === 'paper'        && <PaperTrading userId={user?.id} activeSymbol={symbol} liveDecision={decision} />}
           {tab === 'backtest'     && <EquityChart symbol={symbol} />}
