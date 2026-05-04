@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { C, FONTS, RADIUS } from '../components/theme'
 
 export default function OAuthCallbackPage({ onSuccess }) {
-  const [status, setStatus] = useState('processing') // 'processing' | 'error'
+  const [status, setStatus] = useState('processing') 
   const [errorMsg, setErrorMsg] = useState('')
 
   useEffect(() => {
